@@ -709,9 +709,12 @@ async function pickClaudeFolder() {
 function createTray() {
   let icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'tray.png'));
   if (MAC) {
-    // macOS draws it black or white to match the menu bar: a template image, at menu bar size
-    icon = icon.resize({ width: 18, height: 18 });
-    icon.setTemplateImage(true);
+    // macOS draws a template image as a flat silhouette, and her art is opaque: a white square.
+    // Her own colours instead, at menu bar size, with a 2x copy for Retina screens.
+    const art = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'capri.png'));
+    const big = art.resize({ width: 36, height: 36, quality: 'best' });
+    icon = big.resize({ width: 18, height: 18, quality: 'best' });
+    icon.addRepresentation({ scaleFactor: 2, dataURL: big.toDataURL() });
   }
   tray = new Tray(icon);
   tray.setToolTip('Capri');
