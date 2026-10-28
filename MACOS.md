@@ -67,6 +67,28 @@ macOS publishes the Dock's edge and height (the work area) but not its bar: the 
 is from the Dock's own size and tiles, a little narrower than it really is so she never floats past its end.
 If the helper dies three times in a row, she gives up on perching for that run and stays on the floor.
 
+## Feeling your Mac
+
+Everything she senses about the machine is native, and nothing needs a permission:
+
+- **The processor** — `os.cpus`, sampled every 3 s. Full tilt for a while and she overheats.
+- **The charger and the battery** — the browser's battery API, which Chromium reads from IOKit: plugged in,
+  unplugged, running low.
+- **The network** — the browser's own online/offline events, not an API call of hers: the assistant's endpoint
+  being down doesn't blind her, and a blip under four seconds isn't worth a line.
+- **USB sticks and SD cards** — `diskutil list external physical`, by the name of the volume (not "disk4"),
+  looked at again within a second of one arriving. She dives into it by the clock: on a Mac that's her own icon
+  in the menu bar, top right, so the dive and the lightning go to the top edge of her window under it.
+- **Anything else you plug in** — a phone, a controller, a headset, a camera: IOKit tells the helper the moment
+  a USB device arrives or goes (no polling), with the name the device gives and the kind of thing it is. She
+  sends a bolt up to the clock and says what it was. Hubs are left out (they only come with the devices you
+  plugged in), and so is the Mac's own hardware.
+- **Games** — the program of the window in front is matched against Steam's and Epic's libraries, GOG's
+  bundles (its `goggame-*.info` file) and Riot's own `.app`s. She says something and steps aside while you
+  play, then comes back to ask if you won.
+
+`capri-windows --devices`, `--disk <id>` and `--game <path>` print what the helper makes of them.
+
 ## Watching OpenCode
 
 ```sh
@@ -99,7 +121,8 @@ with your login keychain and stored in the app's config folder.
 
 - Menu bar instead of the notification area; `⌘⌃C` instead of `Ctrl+Alt+C`; "the Dock" instead of "the taskbar".
 - Window tracking is Quartz instead of Win32; the AI-in-front detection has no window titles without Screen
-  Recording, so it falls back to app names.
+  Recording, so it falls back to app names. What you plug in comes from IOKit and DiskArbitration instead of
+  WMI, and games are found in the launchers' libraries on this Mac (Steam, Epic, GOG, Riot).
 - Apps are found in `/Applications`, `~/Applications`, `/System/Applications` and Steam's macOS library.
   Close an app with a polite `SIGTERM` (the same as its own Quit), and with `SIGKILL` only when you ask twice.
 - File search uses Spotlight (`mdfind`) instead of Windows Search; screenshots use `desktopCapturer`.

@@ -1861,6 +1861,8 @@ const MAC_WORDS = [
   ['на твоём ПК', 'на твоём Mac'],
   ['на этом ПК', 'на этом Mac'],
   ['слабых ПК', 'слабых Mac'],
+  // a drive letter on Windows ("E:"); on a Mac it's the stick's name, which takes no colon
+  ['({drive}:)', '({drive})'],
 ];
 export function setPlatform({ shortcut: keys, mac: isMac } = {}) {
   if (keys) shortcut = keys;

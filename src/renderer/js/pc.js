@@ -2,7 +2,7 @@
 // network, things you plug in (a USB stick, a phone, a controller...) and the games you play.
 // Her menu › React to my PC turns it off.
 
-import { pick, fmt } from './util.js';
+import { pick, fmt, clamp } from './util.js';
 
 const HOT = 85; // % of the processor, for HOT_FOR
 const HOT_FOR = 15000;
@@ -12,7 +12,7 @@ const PLUG_EVERY = 15 * 1000;
 const GAME_AFTER = 6000;  // a game in front this long: you're playing
 const GAME_OVER = 8000;   // and gone this long: you're done
 
-const PHONE = /phone|iphone|apple|galaxy|samsung|pixel|xiaomi|redmi|poco|oneplus|huawei|honor|motorola|oppo|vivo|realme|nokia|xperia|android|mobile|t[ée]l[ée]phone|celular|телефон/i;
+const PHONE = /phone|iphone|ipad|apple mobile|galaxy|samsung|pixel|xiaomi|redmi|poco|oneplus|huawei|honor|motorola|oppo|vivo|realme|nokia|xperia|android|mobile|t[ée]l[ée]phone|celular|телефон/i;
 const PAD = /controller|gamepad|manette|mando|controle|xbox|dualsense|dualshock|joy-?con|геймпад/i;
 
 // what was plugged in, from the name and the class Windows gives it
@@ -173,13 +173,27 @@ export class Pc {
     }
   }
 
+  // Where the clock is, as far as she can reach it: her tray icon (in the taskbar on Windows, in
+  // the menu bar on a Mac), else the corner by it when the system hides the icon. Her window stops
+  // at the edge of that bar, so the spot is pulled just inside it: she dives, or her lightning
+  // goes, to the rim right under (or over) the clock.
+  async clockSpot() {
+    const place = await this.host.trayPlace().catch(() => null);
+    const { w, h } = this.capri.view;
+    const box = place?.icon || place?.corner;
+    if (!box) return { x: w - 140, y: h - 6 };
+    return {
+      x: clamp(box.x + box.w / 2, 24, w - 24),
+      y: clamp(box.y + box.h / 2, 4, h - 6),
+    };
+  }
+
   // a USB stick: she dives into it to have a look
   async stick(drive) {
     this.capri.wake();
     this.say(fmt(pick(this.t.usb), { drive }), 'look', 2500);
     if (!this.quiet || !(await this.whenFree())) return;
-    const { w, h } = this.capri.view;
-    if (await this.capri.visit({ x: w - 140, y: h - 6 })) this.say(pick(this.t.usbBack), 'smug', 4500);
+    if (await this.capri.visit(await this.clockSpot())) this.say(pick(this.t.usbBack), 'smug', 4500);
   }
 
   // anything else plugged in or out: a phone, a controller, a headset...
@@ -189,11 +203,8 @@ export class Pc {
     this.plugAt = Date.now();
     const lines = plug.in ? this.t.plugIn : this.t.plugOut;
     this.capri.wake();
-    // plugged in: a jolt of lightning down to where it came in (by the clock), before she talks
-    if (plug.in && this.capri.free) {
-      const { w, h } = this.capri.view;
-      this.capri.zap(w - 140, h - 10);
-    }
+    // plugged in: a jolt of lightning up to where it came in (by the clock), before she talks
+    if (plug.in && this.capri.free) this.clockSpot().then((at) => this.capri.zap(at.x, at.y));
     this.say(fmt(pick(lines[kind] || lines.device), { name: plug.name }), plug.in ? 'look' : 'aside', 4000);
   }
 

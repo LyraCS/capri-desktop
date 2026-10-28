@@ -23,6 +23,7 @@
     "hooks:opencode:install": "node scripts/install-opencode-plugin.js",
     "hooks:opencode:uninstall": "node scripts/install-opencode-plugin.js --uninstall",
     "test:opencode": "node --test tests/opencode.test.js",
+    "test:mac": "node scripts/build-mac-helper.js && node --test tests/mac-helper.test.js",
     "dist:mac": "node scripts/build-mac-helper.js && electron-builder --mac"
   },
   "keywords": [
