@@ -52,11 +52,19 @@ Everything lives in `~/Library/Application Support/capri-desktop` (config, memor
 
 On by default. She sits on the top edge of the window in front while the assistant works, and rides along when
 it moves, closes or goes fullscreen (then she drops to her corner). Turn it off in her menu with
-**Possess my windows**, and pick **When she rests › Sitting on the Dock** if you want her to hang off the Dock
-instead of her corner.
+**Possess my windows**.
+
+Her resting places follow the Dock, which is a floating pill on a Mac and not a taskbar that spans the screen:
+**When she rests › In her corner** stands her at the right end of the Dock, and **Sitting on the Dock** sits her
+on it, legs hanging over it. Either way she moves with it when you change its size in System Settings, add or
+remove apps, or move it to another edge. An auto-hidden Dock is no place to sit (it isn't there most of the
+time), so she rests on the bottom of the screen instead; with the Dock on the left or right, her corner is the
+bottom-right of the work area, beside it.
 
 How it works: `windows-mac.js` spawns `capri-windows`, which asks Quartz for the on-screen windows (positions
 in points, the same units the overlay uses) and prints one JSON line per change. No permissions, no injection.
+macOS publishes the Dock's edge and height (the work area) but not its bar: the helper works out where the pill
+is from the Dock's own size and tiles, a little narrower than it really is so she never floats past its end.
 If the helper dies three times in a row, she gives up on perching for that run and stays on the floor.
 
 ## Watching OpenCode

@@ -1116,7 +1116,7 @@ function main() {
     // a screen plugged in, unplugged, or rearranged: her window fitted again, and she learns of it
     const screensChanged = () => {
       fitOverlay();
-      windowWatch?.refresh();
+      windowWatch?.restart?.(); // its work area (the Dock's size) is cached: start it over
       rebuildTray();
       sendCommand('screens');
     };

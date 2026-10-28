@@ -53,7 +53,7 @@ export class Capri {
     this.stance = 'stand';
     this.perch = null;    // { id, dx }: the window she sits on, and where along it
     this.peekSide = null; // left | right | top
-    this.windows = { fg: 0, wins: [] };
+    this.windows = { fg: 0, wins: [], dock: null };
     this.busy = false;
     this.hidden = false;
     this.stowed = false;  // folded away in her biochip (Ctrl+Alt+C)
@@ -228,10 +228,13 @@ export class Capri {
   }
 
   setView(w, h, floor = h) {
+    const wasRest = this.restY; // the top of the taskbar, or of the Dock, as she had it
     this.view = { w, h, floor };
     if (this.stance === 'stand') {
       this.pos.x = clamp(this.pos.x, 60, w - 60);
-      this.pos.y = clamp(this.pos.y, SPRITE.height * this.scale, floor - 4);
+      // standing on the floor (the Dock grew or shrank under her): she stays on it
+      if (Math.abs(this.pos.y - wasRest) < 14) this.pos.y = this.restY;
+      this.pos.y = clamp(this.pos.y, SPRITE.height * this.scale, Math.max(floor - 4, this.restY));
     }
     this.place();
   }
@@ -314,13 +317,23 @@ export class Capri {
     return this.view.floor - 6;
   }
 
+  // where her feet rest on the floor: the Dock's top edge when there is one (its pill starts
+  // right there), else a few pixels above the bottom, so her feet aren't cut by her window
+  get restY() {
+    return this.windows.dock ? this.view.floor : this.floor;
+  }
+
   spot(name) {
     const { w } = this.view;
     const s = this.scale;
     const side = 150 * s + 30;
     switch (name) {
-      case 'post':
+      case 'post': {
+        // her corner: on a Mac, the right end of the Dock, wherever it is and however big
+        const dock = this.windows.dock;
+        if (dock) return { x: Math.min(dock.x + dock.w - 70, w - 60), y: this.restY };
         return { x: w - side - 30, y: this.floor };
+      }
       case 'stage':
         return { x: w * 0.5 + rand(-w * 0.12, w * 0.12), y: this.floor };
       case 'chip': // next to her biochip, bottom left
@@ -337,14 +350,30 @@ export class Capri {
   // ---------- windows ----------
 
   setWindows(data) {
+    const dock = this.windows.dock;
+    const was = this.spot('post'); // her corner before the Dock moved
     this.windows = data;
+    const now = this.spot('post');
+    // standing at her corner when the Dock moved or resized under her (or when it came up at
+    // startup, after she was put in her fallback corner): step along with it, no effect
+    if (this.stance === 'stand' && !this.busy && !this.dragging && !this.act
+      && Math.abs(this.pos.x - was.x) < 3 && Math.abs(this.pos.y - was.y) < 14
+      && (now.x !== was.x || now.y !== was.y)) {
+      this.pos = now;
+      this.place();
+      return;
+    }
     if (this.stance !== 'sit' || this.busy || this.dragging) return;
     const win = this.perchWin(this.perch.id);
-    const dx = win ? clamp(this.perch.dx, 50, win.w - 60) : 0;
+    let dx = win ? this.perch.dx : 0;
+    // the Dock grew or shrank under her (its size slider): she keeps her place from its right end
+    if (win?.id === 'taskbar' && data.dock && dock) dx += data.dock.w - dock.w;
+    dx = win ? clamp(dx, 50, win.w - 60) : 0;
     if (!win || !this.canSit(win) || this.covered(win, win.x + dx)) {
       this.fall(); // the ledge is gone (closed, minimized, maximized or covered)
       return;
     }
+    this.perch.dx = dx; // stay with the ledge as it is now
     const to = this.seat(win, dx);
     if (to.x !== this.pos.x || to.y !== this.pos.y) {
       this.pos = to; // ride along with the window
@@ -377,8 +406,11 @@ export class Capri {
 
   // A window she could sit on, the one in front first. Returns { win, dx } or null.
   // The top of the taskbar (the bottom of her screen), as a ledge to sit on like a window's: her
-  // legs hang down behind it.
+  // legs hang down behind it. On a Mac it's the Dock: a pill that doesn't span the screen, so its
+  // own width is the ledge (her helper says where it is), not the whole bottom of the screen.
   ledge() {
+    const dock = this.windows.dock;
+    if (dock) return { id: 'taskbar', x: dock.x, y: dock.y, w: dock.w, h: dock.h, max: false };
     return { id: 'taskbar', x: 0, y: this.view.floor, w: this.view.w, h: this.view.h - this.view.floor, max: false };
   }
 
@@ -392,8 +424,13 @@ export class Capri {
     const post = this.spot('post');
     if (this.restOn !== 'taskbar') return this.teleport(post);
     if (this.stance === 'sit' && this.perch?.id === 'taskbar') return Promise.resolve();
-    // left of the clock and the tray icons, right of the middle (the app icons, on Windows 11)
-    return this.sitOn({ win: this.ledge(), dx: clamp(this.view.w - 440, this.view.w * 0.6, post.x) });
+    const win = this.ledge();
+    // on a Mac, the Dock: its right end, by the Trash; on Windows, left of the clock and the tray
+    // icons, right of the middle (the app icons, on Windows 11)
+    const dx = this.windows.dock
+      ? Math.max(60, win.w - 80)
+      : clamp(this.view.w - 440, this.view.w * 0.6, post.x);
+    return this.sitOn({ win, dx });
   }
 
   pickSeat({ frontOnly = false, except = null } = {}) {

@@ -1,9 +1,10 @@
 // Watches the top-level windows so Capri can sit on them (macOS).
-// Prints one JSON line whenever something changes, in the same shape as windows.ps1:
-// the front window and the visible windows in z-order (front first), in Quartz points
-// (top-left origin, the same space as the overlay's bounds). No contents, and no titles
-// unless macOS has granted Screen Recording: the title of the front window is only checked
-// against a short list of AI names for her jealousy, and all that goes out is which matched.
+// Prints one JSON line whenever something changes: the front window and the visible windows in
+// z-order (front first), in Quartz points (top-left origin, the same space as the overlay's
+// bounds), plus where the Dock's pill is (`dock`, the ledge she rests on). No contents, and no
+// titles unless macOS has granted Screen Recording: the title of the front window is only
+// checked against a short list of AI names for her jealousy, and all that goes out is which
+// matched.
 //
 //   capri-windows --self <pid> [--dump]
 
@@ -93,6 +94,37 @@ func usbSticks() -> String {
   return usbCache
 }
 
+// The Dock, on macOS: a floating pill that doesn't span the screen, and whose bar rect macOS
+// doesn't publish (its only window is the whole display). The work area gives its edge and
+// height exactly: the Dock reserves them. Its width comes from its own settings, a tile being
+// `tilesize` wide plus the Dock's gap and padding. Finder and the Trash are always there; the
+// minimized windows aren't in its list, and leaving them out keeps her seat left of the real
+// end of the Dock, so she's never floating past it.
+func dockPref(_ key: String) -> Any? {
+  CFPreferencesCopyAppValue(key as CFString, "com.apple.dock" as CFString)
+}
+
+func dockRect() -> String? {
+  guard let screen = NSScreen.screens.first else { return nil }
+  if (dockPref("autohide") as? NSNumber)?.boolValue == true { return nil } // it isn't there: no ledge
+  if (dockPref("orientation") as? String) != "bottom" { return nil } // a side Dock isn't a ledge
+  let band = Int(screen.visibleFrame.minY - screen.frame.minY) // the Dock's strip, in points
+  if band < 8 { return nil }
+  let tilesize = (dockPref("tilesize") as? NSNumber)?.doubleValue ?? 48
+  var tiles = 2 // Finder and the Trash: never in the list
+  for key in ["persistent-apps", "persistent-others"] {
+    tiles += (dockPref(key) as? [Any])?.count ?? 0
+  }
+  if (dockPref("show-recents") as? NSNumber)?.boolValue == true {
+    tiles += (dockPref("recent-apps") as? [Any])?.count ?? 0
+  }
+  let slot = Int((tilesize * 1.26).rounded()) // a tile and the gap after it
+  let pad = Int((tilesize * 0.15).rounded())
+  let width = tiles * slot + 2 * pad
+  let quartz = quartzFrame(screen)
+  return "{\"x\":\(Int(quartz.midX) - width / 2),\"y\":\(Int(quartz.maxY) - band),\"w\":\(width),\"h\":\(band)}"
+}
+
 func snapshot(selfPid: pid_t) -> String {
   // onscreen, front to back. The first ordinary window is the one in front: NSWorkspace's idea of
   // the frontmost app is not reliable from a background process, and it sees the Dock as nothing.
@@ -147,7 +179,7 @@ func snapshot(selfPid: pid_t) -> String {
   // the Dock is never "in front" the way the taskbar can be: no windows at all means the floor
   let keys = aiKeys.sorted().map { json($0) }.joined(separator: ",")
 
-  return "{\"fg\":\(frontID),\"taskbar\":false,\"ai\":[\(keys)],\"game\":\(game.map { json($0) } ?? "null"),\"usb\":\(usbSticks()),\"plug\":null,\"wins\":[\(wins)]}"
+  return "{\"fg\":\(frontID),\"taskbar\":false,\"ai\":[\(keys)],\"game\":\(game.map { json($0) } ?? "null"),\"usb\":\(usbSticks()),\"plug\":null,\"dock\":\(dockRect() ?? "null"),\"wins\":[\(wins)]}"
 }
 
 // AppKit screens are bottom-left; Quartz (and the overlay) are top-left of the main display.
