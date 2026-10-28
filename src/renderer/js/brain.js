@@ -76,9 +76,10 @@ export class Brain {
     }
     // the demo's second half (scripts/demo-sequence.js), not a Claude event
     if (evt.hook_event_name === 'CapriShowcase') return this.onShowcase?.();
-    // Codex's and Antigravity's hooks mark their sessions (codex:..., agy:...): only the one she watches
-    // counts. Another one at work is another AI in your life: she notices (bond.js).
-    const source = /^(codex|agy):/.exec(String(evt.session_id || ''))?.[1] || 'claude';
+    // Codex's, Antigravity's and OpenCode's hooks mark their sessions (codex:..., agy:...,
+    // opencode:...): only the one she watches counts. Another one at work is another AI in your
+    // life: she notices (bond.js).
+    const source = /^(codex|agy|opencode):/.exec(String(evt.session_id || ''))?.[1] || 'claude';
     if (!evt.demo && source !== this.assistant) {
       this.onRival?.(source === 'agy' ? 'gemini' : source);
       return undefined;

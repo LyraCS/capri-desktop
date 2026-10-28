@@ -1,22 +1,26 @@
 'use strict';
 
-// The coding assistants she can watch, each through its own hooks: Claude Code, Codex and Antigravity.
+// The coding assistants she can watch, each through its own hooks: Claude Code, Codex, Antigravity,
+// and OpenCode (through its V2 plugin API).
 
 const fs = require('node:fs');
 const path = require('node:path');
 const claude = require('../../scripts/install-hooks');
 const codex = require('../../scripts/install-codex-hooks');
 const agy = require('../../scripts/install-hooks-agy');
+const opencode = require('../../scripts/install-opencode-plugin');
 
 const ASSISTANTS = {
   claude: { name: 'Claude Code', hooks: claude, help: 'https://code.claude.com/docs/en/quickstart' },
   codex: { name: 'Codex', hooks: codex, help: 'https://learn.chatgpt.com/docs/hooks' },
   agy: { name: 'Antigravity', hooks: agy, help: 'https://antigravity.google/docs/hooks' },
+  opencode: { name: 'OpenCode', hooks: opencode, help: 'https://opencode.ai/v2/docs/build/plugins' },
 };
 
 // Which one she watches: the one picked, else the one her hooks are in, else the one that's installed.
 function resolveAssistant(preference) {
   if (ASSISTANTS[preference]) return preference;
+  if (opencode.status().installed) return 'opencode';
   if (codex.status().events.length) return 'codex';
   if (claude.status().installed) return 'claude';
   if (agy.status().installed) return 'agy';

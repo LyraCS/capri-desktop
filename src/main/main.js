@@ -13,7 +13,7 @@ const { randomUUID } = require('node:crypto');
 const config = require('./config');
 const { TRAY, LANGS } = require('./labels');
 const { createBridge } = require('./bridge');
-const { startWindowWatch } = require('./windows');
+const { startWindowWatch } = require(process.platform === 'darwin' ? './windows-mac' : './windows');
 const llm = require('./llm');
 const ollama = require('./ollama');
 const setup = require('./setup');
@@ -28,6 +28,9 @@ const demoSteps = require('../../scripts/demo-sequence');
 const ROOT = path.resolve(__dirname, '..', '..');
 const DEV = process.argv.includes('--dev');
 const PORT = Number(process.env.CAPRI_PORT) || 47823;
+const MAC = process.platform === 'darwin';
+// put her away / bring her back: Control+Alt+C on Windows, Command+Control+C on macOS
+const SHORTCUT = MAC ? 'Command+Control+C' : 'Control+Alt+C';
 const SOUND_EXT = /\.(mp3|wav|ogg|m4a)$/i;
 
 const OLLAMA_SITE = 'https://ollama.com';
@@ -132,6 +135,13 @@ function moveOverlay(id) {
 // below the top of the taskbar (0, or its height).
 function overlayArea() {
   const { workArea, bounds } = targetDisplay();
+  if (MAC) {
+    // the menu bar always stays hers to use: on a Mac only the Dock is added below, never the top
+    const area = config.load().rest === 'taskbar'
+      ? { x: bounds.x, y: workArea.y, width: bounds.width, height: bounds.y + bounds.height - workArea.y }
+      : workArea;
+    return { area, gap: area.y + area.height - (workArea.y + workArea.height) };
+  }
   const area = config.load().rest === 'taskbar' ? { ...bounds, y: bounds.y + 1, height: bounds.height - 1 } : workArea;
   return { area, gap: area.y + area.height - (workArea.y + workArea.height) };
 }
@@ -197,6 +207,9 @@ function createOverlay() {
 
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setIgnoreMouseEvents(true, { forward: true });
+  // her window follows you across Spaces and sits over fullscreen apps (macOS). The transform is
+  // skipped so Electron doesn't turn the app into a background one (menus, dialogs keep working).
+  if (MAC) overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   overlay.loadURL('capri://app/src/renderer/index.html');
   // always shown: put away, she's still there as her biochip in the corner. Sized again first:
   // Windows keeps a new window inside the work area, and resting on the taskbar it covers it too.
@@ -243,8 +256,8 @@ function playDemo() {
   next();
 }
 
-// During the demo, a little fake terminal for her to sit on and take over (window tracking is
-// Windows only, so only there). Opened without stealing focus; closing it drops her off it.
+// During the demo, a little fake terminal for her to sit on and take over. Opened without
+// stealing focus; closing it drops her off it.
 let demoWin = null;
 const DEMO_TERMINAL = `<body style="margin:0;background:#14101c;color:#8f8aa3;font:13px/1.7 Consolas,monospace;padding:14px 18px">
 <div style="color:#36ff7a">PS C:\\night-city-api&gt; npm test -- gigs</div>
@@ -255,7 +268,7 @@ const DEMO_TERMINAL = `<body style="margin:0;background:#14101c;color:#8f8aa3;fo
 function demoWindow(open) {
   demoWin?.destroy();
   demoWin = null;
-  if (!open || process.platform !== 'win32') return false;
+  if (!open) return false;
   const b = overlay.getBounds();
   demoWin = new BrowserWindow({
     x: Math.round(b.x + b.width * 0.5 - 310), y: Math.round(b.y + b.height * 0.42), width: 620, height: 300,
@@ -281,7 +294,11 @@ function resolveLang(setting) {
 // What the overlay gets: `lang` is the resolved one, `langSetting` what the user picked.
 function rendererConfig() {
   const { apiKeys, ...cfg } = config.load(); // the keys stay here: the overlay only learns which ones are set
-  return { ...cfg, keys: Object.keys(apiKeys || {}), assistant: activeAssistant().id, lang: resolveLang(cfg.lang), langSetting: cfg.lang, floorGap: overlayArea().gap };
+  return {
+    ...cfg, keys: Object.keys(apiKeys || {}), assistant: activeAssistant().id,
+    lang: resolveLang(cfg.lang), langSetting: cfg.lang, floorGap: overlayArea().gap,
+    shortcut: MAC ? '⌘⌃C' : 'Ctrl+Alt+C', mac: MAC,
+  };
 }
 
 function updateConfig(patch) {
@@ -296,13 +313,37 @@ function updateConfig(patch) {
   return cfg;
 }
 
+// The menu speaks of Windows on every platform: on a Mac, the Dock, macOS, and a Mac.
+function macText(text) {
+  return text
+    .replace(/taskbar/gi, 'Dock')
+    .replace(/barre des tâches/gi, 'Dock')
+    .replace(/barra de tareas/gi, 'Dock')
+    .replace(/barra de tarefas/gi, 'Dock')
+    .replace(/панели задач/gi, 'Dock')
+    .replace(/Start with Windows/gi, 'Start at login')
+    .replace(/Iniciar con Windows/gi, 'Iniciar al iniciar sesión')
+    .replace(/Iniciar com o Windows/gi, 'Iniciar ao entrar')
+    .replace(/Запускать вместе с Windows/gi, 'Запускать при входе')
+    .replace(/Comme Windows/gi, 'Comme macOS')
+    .replace(/Like Windows/gi, 'Like macOS')
+    .replace(/Como o Windows/gi, 'Como o macOS')
+    .replace(/Como Windows/gi, 'Como macOS')
+    .replace(/Как в Windows/gi, 'Как в macOS')
+    .replace(/\bPC\b/g, 'Mac');
+}
+
 function rebuildTray() {
   if (!tray) return;
   const cfg = config.load();
   const hookState = activeHooks().status();
   const watched = activeAssistant();
-  const t = Object.fromEntries(Object.entries(TRAY[resolveLang(cfg.lang)]).map(([key, value]) =>
-    [key, typeof value === 'string' && watched.id !== 'claude' ? value.replaceAll('Claude Code', watched.name) : value]));
+  const t = Object.fromEntries(Object.entries(TRAY[resolveLang(cfg.lang)]).map(([key, value]) => {
+    if (typeof value !== 'string') return [key, value];
+    let text = watched.id !== 'claude' ? value.replaceAll('Claude Code', watched.name) : value;
+    if (MAC) text = macText(text);
+    return [key, text];
+  }));
 
   const screens = displays();
   const current = targetDisplay().id;
@@ -339,7 +380,7 @@ function rebuildTray() {
         : [{ label: t.noReminders, enabled: false }],
     },
     { label: t.custom, click: () => sendCommand('customize') },
-    { label: cfg.visible ? t.hide : t.show, accelerator: 'Ctrl+Alt+C', click: () => toggleVisible() },
+    { label: cfg.visible ? t.hide : t.show, accelerator: SHORTCUT, click: () => toggleVisible() },
     { type: 'separator' },
     {
       label: t.size,
@@ -666,7 +707,12 @@ async function pickClaudeFolder() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'tray.png'));
+  let icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'icons', 'tray.png'));
+  if (MAC) {
+    // macOS draws it black or white to match the menu bar: a template image, at menu bar size
+    icon = icon.resize({ width: 18, height: 18 });
+    icon.setTemplateImage(true);
+  }
   tray = new Tray(icon);
   tray.setToolTip('Capri');
   tray.on('click', () => sendCommand('status'));
@@ -875,7 +921,9 @@ function registerIpc() {
     const d = targetDisplay().bounds;
     const b = tray?.getBounds();
     const icon = b && b.width > 0 ? { x: b.x - o.x, y: b.y - o.y, w: b.width, h: b.height } : null;
-    const corner = { x: d.x + d.width - 150 - o.x, y: d.y + d.height - 44 - o.y, w: 140, h: 40 };
+    const corner = MAC
+      ? { x: d.x + d.width - 150 - o.x, y: d.y - o.y, w: 140, h: 32 }
+      : { x: d.x + d.width - 150 - o.x, y: d.y + d.height - 44 - o.y, w: 140, h: 40 };
     return { icon, corner };
   });
   // her guide: Claude Code's folder (~/.claude) in Explorer, its settings file selected
@@ -1027,7 +1075,8 @@ function main() {
   if (process.platform === 'win32') app.setAppUserModelId('capri.desktop');
 
   app.whenReady().then(() => {
-    if (!['codex', 'claude'].includes(config.load().assistant)) config.save({ assistant: activeAssistant().id });
+    if (MAC) app.dock?.hide(); // a menu bar app, not a Dock one
+    if (!Object.keys(ASSISTANTS).includes(config.load().assistant)) config.save({ assistant: activeAssistant().id });
     serveProtocol();
     registerIpc();
     createOverlay();
@@ -1047,7 +1096,20 @@ function main() {
       onEvent: (evt) => !llm.isChatSession(evt.session_id) && overlay?.webContents.send('claude:event', evt),
       onDebug: DEV ? debugHandler : null,
     });
-    globalShortcut.register('Control+Alt+C', () => toggleVisible());
+    globalShortcut.register(SHORTCUT, () => toggleVisible());
+    // --dev / CI: a picture of the overlay, taken by Chromium itself (no Screen Recording needed)
+    if (DEV && process.env.CAPRI_SNAPSHOT) {
+      setTimeout(async () => {
+        try {
+          const image = await overlay.webContents.capturePage();
+          fs.writeFileSync(process.env.CAPRI_SNAPSHOT, image.toPNG());
+          console.log('[capri] snapshot:', process.env.CAPRI_SNAPSHOT);
+        } catch (err) {
+          console.error('[capri] snapshot failed:', err.message);
+        }
+        app.quit();
+      }, Number(process.env.CAPRI_SNAPSHOT_MS) || 5000);
+    }
     llm.restoreClaude(readMemory().claude);
     refreshModels(); // for her menu's model list
     setTimeout(() => launch.launchables().catch(() => {}), 20000); // what she can open, before you ask

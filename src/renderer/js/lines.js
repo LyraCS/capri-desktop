@@ -1766,7 +1766,7 @@ export const LINES = {
 
 // The coding assistants she can watch besides Claude Code: the same lines with their name, their
 // hooks file, and what to do once her hooks are in.
-export const ASSISTANT_NAMES = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity' };
+export const ASSISTANT_NAMES = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity', opencode: 'OpenCode' };
 const OTHERS = {
   codex: {
     name: 'Codex', file: 'hooks.json', dir: '.codex',
@@ -1803,33 +1803,104 @@ const OTHERS = {
       ru: 'Теперь начни новый разговор в Antigravity. Как только он что-то сделает, я скажу.',
     },
   },
+  opencode: {
+    name: 'OpenCode', file: 'capri-opencode.ts', dir: '.config/opencode',
+    ask: {
+      en: 'Want me to plug into OpenCode? One click, then restart OpenCode (or reload it) and start a conversation.',
+      fr: 'Tu veux que je me branche sur OpenCode ? Un clic, puis relance OpenCode (ou recharge-le) et lance une conversation.',
+      es: '¿Quieres que me conecte a OpenCode? Un clic, y luego reinicia OpenCode (o recárgalo) y empieza una conversación.',
+      pt: 'Quer que eu me conecte ao OpenCode? Um clique, depois reinicie o OpenCode (ou recarregue) e comece uma conversa.',
+      ru: 'Подключиться к OpenCode? Один клик, потом перезапусти OpenCode (или перезагрузи его) и начни разговор.',
+    },
+    after: {
+      en: 'Now restart OpenCode and start a conversation. As soon as it does something, I’ll tell you.',
+      fr: 'Maintenant relance OpenCode et lance une conversation. Dès qu’il fait quelque chose, je te le dis.',
+      es: 'Ahora reinicia OpenCode y empieza una conversación. En cuanto haga algo, te aviso.',
+      pt: 'Agora reinicie o OpenCode e comece uma conversa. Assim que ele fizer algo, eu te aviso.',
+      ru: 'Теперь перезапусти OpenCode и начни разговор. Как только он что-то сделает, я скажу.',
+    },
+  },
 };
+// The key that puts her away, and the words that are wrong away from Windows: set once at boot.
+let shortcut = 'Ctrl+Alt+C';
+let mac = false;
+
+// Sentences that only make sense on Windows. Longest first: the phrases carry the whole meaning,
+// the single words only the platform's name.
+const MAC_WORDS = [
+  ['Windows la cache souvent derrière le ^ à côté de l’horloge', 'macOS la garde dans la barre des menus, en haut à droite'],
+  ['Windows often hides it behind the ^ next to the clock', 'macOS keeps it in the menu bar, top right'],
+  ['Windows suele esconderlo detrás del ^ junto al reloj', 'macOS lo guarda en la barra de menús, arriba a la derecha'],
+  ['O Windows costuma escondê-lo atrás do ^ perto do relógio', 'O macOS o guarda na barra de menus, no alto à direita'],
+  ['Windows часто прячет её за ^ рядом с часами', 'macOS держит её в строке меню, справа вверху'],
+  ['Windows a coupé ses animations', 'macOS a réduit les animations'],
+  ['Windows has its animations turned off', 'macOS has reduced motion turned on'],
+  ['Windows tiene las animaciones desactivadas', 'macOS tiene el movimiento reducido'],
+  ['O Windows está com as animações desligadas', 'O macOS está com o movimento reduzido'],
+  ['В Windows отключены анимации', 'В macOS включено уменьшение движения'],
+  ['chiffrée avec ton compte Windows', 'chiffrée avec le trousseau de ton Mac'],
+  ['encrypted with your Windows account', 'encrypted with your Mac’s Keychain'],
+  ['cifrada con tu cuenta de Windows', 'cifrada con el llavero de tu Mac'],
+  ['criptografada com a sua conta do Windows', 'criptografada com o chaveiro do seu Mac'],
+  ['зашифрованным твоей учётной записью Windows', 'зашифрованным в связке ключей твоего Mac'],
+  ['Windows peut te demander de confirmer.', 'macOS peut te demander de confirmer.'],
+  ['Windows may ask you to confirm.', 'macOS may ask you to confirm.'],
+  ['Windows puede pedirte que confirmes.', 'macOS puede pedirte que confirmes.'],
+  ['O Windows pode pedir pra você confirmar.', 'O macOS pode pedir pra você confirmar.'],
+  ['Windows может попросить подтвердить.', 'macOS может попросить подтвердить.'],
+  ['у тебя на ПК', 'у тебя на Mac'],
+  ['sur ton PC', 'sur ton Mac'],
+  ['sur ce PC', 'sur ce Mac'],
+  ['de ce PC', 'de ce Mac'],
+  ['on your PC', 'on your Mac'],
+  ['this PC', 'this Mac'],
+  ['en tu PC', 'en tu Mac'],
+  ['este PC', 'este Mac'],
+  ['no seu PC', 'no seu Mac'],
+  ['neste PC', 'neste Mac'],
+  ['на твоём ПК', 'на твоём Mac'],
+  ['на этом ПК', 'на этом Mac'],
+  ['слабых ПК', 'слабых Mac'],
+];
+export function setPlatform({ shortcut: keys, mac: isMac } = {}) {
+  if (keys) shortcut = keys;
+  mac = Boolean(isMac);
+}
+
 const converted = new Map();
 export function linesFor(lang, assistant = 'claude') {
   const base = LINES[lang] || LINES.fr;
   const other = OTHERS[assistant];
-  if (!other) return base;
-  const key = `${assistant}:${lang}`;
+  // on Windows there's nothing to change in Claude's own lines: the same object, as before
+  if (!other && !mac && shortcut === 'Ctrl+Alt+C') return base;
+  const key = `${assistant}:${lang}:${shortcut}:${mac ? 'mac' : 'win'}`;
   if (converted.has(key)) return converted.get(key);
   // French drops the e of "de" and "que" before a vowel: "la fenêtre d'Antigravity"
-  const elide = lang === 'fr' && /^[aeiouy]/i.test(other.name);
+  const elide = Boolean(other) && lang === 'fr' && /^[aeiouy]/i.test(other.name);
   const convert = (value) => {
     if (typeof value === 'string') {
       let text = value;
-      if (elide) text = text.replace(/\b(d|qu)e (Claude Code|Claude)\b/g, `$1’${other.name}`);
-      return text.replace(/Claude Code|Claude/g, other.name).replaceAll('CLAUDE', other.name.toUpperCase())
-        .replaceAll('settings.json', other.file).replaceAll('.claude', other.dir);
+      if (other) {
+        if (elide) text = text.replace(/\b(d|qu)e (Claude Code|Claude)\b/g, `$1’${other.name}`);
+        text = text.replace(/Claude Code|Claude/g, other.name).replaceAll('CLAUDE', other.name.toUpperCase())
+          .replaceAll('settings.json', other.file).replaceAll('.claude', other.dir);
+      }
+      text = text.replaceAll('Ctrl+Alt+C', shortcut);
+      if (mac) for (const [from, to] of MAC_WORDS) if (text.includes(from)) text = text.split(from).join(to);
+      return text;
     }
     if (Array.isArray(value)) return value.map(convert);
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, convert(v)]));
     return value;
   };
   const result = convert(base);
-  const after = other.after[lang] || other.after.en;
-  result.welcome.connect = other.ask[lang] || other.ask.en;
-  result.welcome.restart = after;
-  result.welcome.noClaude = result.welcome.about; // nothing to buy for these
-  result.hooksOk = after;
+  if (other) {
+    const after = other.after[lang] || other.after.en;
+    result.welcome.connect = other.ask[lang] || other.ask.en;
+    result.welcome.restart = after;
+    result.welcome.noClaude = result.welcome.about; // nothing to buy for these
+    result.hooksOk = after;
+  }
   converted.set(key, result);
   return result;
 }

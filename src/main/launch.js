@@ -1,10 +1,11 @@
 'use strict';
 
 // Opening things when you ask her to (chat.js): an app from the Start menu (Store apps like Spotify
-// included), a Steam or Epic game, your music (the media keys: pause, next…, so it works with
-// Spotify and most players), a Spotify search, or a website. Windows only.
+// included) or from /Applications on a Mac, a Steam or Epic game, your music (the media keys:
+// pause, next…, so it works with Spotify and most players), a Spotify search, or a website.
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawn, execFile } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
@@ -12,6 +13,7 @@ const { app, shell } = require('electron');
 const { powershell } = require('./apps');
 
 const WIN = process.platform === 'win32';
+const MAC = process.platform === 'darwin';
 // not things to open from a chat: uninstallers, help pages and the like
 const SKIP = /uninstall|désinstaller|desinstalar|deinstall|readme|documentation|release notes|support center|website|manual/i;
 const STEAM_SKIP = /redistributable|dedicated server|steamworks/i;
@@ -27,7 +29,7 @@ const words = (text) => plain(text).split(/[^\p{L}\p{N}]+/u).filter((w) => w.len
 // Everything she can open: [{ name, kind: 'app' | 'steam' | 'epic', id }]
 async function launchables() {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.items;
-  if (!WIN) return [];
+  if (!WIN && !MAC) return [];
   const items = [];
   const seen = new Set();
   const add = (item) => {
@@ -36,6 +38,13 @@ async function launchables() {
     seen.add(key);
     items.push(item);
   };
+  if (MAC) {
+    // games first: a game's own entry wins over a shortcut to it
+    for (const game of [...(await steamMacGames()), ...epicGames()]) add(game);
+    for (const item of macApps()) add(item);
+    cache = { at: Date.now(), items };
+    return items;
+  }
   // games first: a game's own entry wins over a shortcut to it
   for (const game of [...steamGames(await steamRoot()), ...epicGames()]) add(game);
   // the Start menu's list is slow the first time (PowerShell starting cold): main.js asks for it early
@@ -45,6 +54,31 @@ async function launchables() {
   }
   if (out !== null) cache = { at: Date.now(), items }; // a list that failed isn't kept: next time, again
   return items;
+}
+
+// The apps in /Applications (and the user's own), by the name of their bundle ("Safari", "Steam").
+function macApps() {
+  const roots = ['/Applications', '/System/Applications', '/System/Applications/Utilities', path.join(os.homedir(), 'Applications')];
+  const apps = [];
+  for (const root of roots) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (!e.name.endsWith('.app')) continue;
+      apps.push({ name: e.name.slice(0, -4), kind: 'app', id: path.join(root, e.name) });
+    }
+  }
+  return apps;
+}
+
+// Steam on a Mac keeps its games in ~/Library/Application Support/Steam, and its libraries elsewhere.
+async function steamMacGames() {
+  const root = path.join(os.homedir(), 'Library', 'Application Support', 'Steam');
+  return steamGames(root);
 }
 
 function steamRoot() {
@@ -62,7 +96,7 @@ function steamGames(root) {
   const libraries = new Set([root]);
   try {
     const vdf = fs.readFileSync(path.join(root, 'steamapps', 'libraryfolders.vdf'), 'utf8');
-    for (const m of vdf.matchAll(/"path"\s+"([^"]+)"/g)) libraries.add(path.normalize(m[1].replace(/\\\\/g, '\\')));
+    for (const m of vdf.matchAll(/"path"\s+"([^"]+)"/g)) libraries.add(path.normalize(MAC ? m[1] : m[1].replace(/\\\\/g, '\\')));
   } catch {
     // one library, the main one
   }
@@ -90,7 +124,9 @@ function steamGames(root) {
 
 // Epic's games, from its launcher's manifests (not the Unreal Engine plugins it also keeps there)
 function epicGames() {
-  const dir = path.join(process.env.ProgramData || 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data', 'Manifests');
+  const dir = MAC
+    ? path.join(os.homedir(), 'Library', 'Application Support', 'Epic', 'EpicGamesLauncher', 'Data', 'Manifests')
+    : path.join(process.env.ProgramData || 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data', 'Manifests');
   let files = [];
   try {
     files = fs.readdirSync(dir).filter((f) => f.endsWith('.item'));
@@ -132,7 +168,7 @@ function match(items, text) {
 
 // What's on your desktop (yours and the shared one): files, folders and shortcuts, by name.
 function desktopItems() {
-  const dirs = [app.getPath('desktop'), path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Desktop')];
+  const dirs = MAC ? [app.getPath('desktop')] : [app.getPath('desktop'), path.join(process.env.PUBLIC || 'C:\\Users\\Public', 'Desktop')];
   const items = [];
   for (const dir of dirs) {
     let entries = [];
@@ -143,6 +179,7 @@ function desktopItems() {
     }
     for (const e of entries) {
       if (e.name.startsWith('.') || /^desktop\.ini$/i.test(e.name)) continue;
+      if (MAC && e.name === '.localized') continue;
       const folder = e.isDirectory();
       items.push({ name: folder ? e.name : e.name.replace(/\.[^.]+$/, ''), kind: folder ? 'folder' : 'file', id: path.join(dir, e.name) });
     }
@@ -151,7 +188,7 @@ function desktopItems() {
 }
 
 // files that run something: never opened without a click, even named by you
-const RUNS = /\.(exe|bat|cmd|ps1|vbs|vbe|js|jse|wsf|wsh|msi|msp|reg|scr|com|jar|hta|cpl|pif)$/i;
+const RUNS = /\.(exe|bat|cmd|ps1|vbs|vbe|js|jse|wsf|wsh|msi|msp|reg|scr|com|jar|hta|cpl|pif|command|sh|applescript|scpt|workflow|terminal)$/i;
 const risky = (item) => item?.kind === 'file' && RUNS.test(item.id);
 
 // Folders asked for by what they are ("ouvre mes téléchargements", "open the file explorer").
@@ -167,11 +204,17 @@ const FOLDERS = [
 ];
 
 function knownFolder(text) {
+  if (!WIN && !MAC) return null;
   const hit = FOLDERS.find(([, re]) => re.test(text));
   return hit ? { name: hit[0], kind: 'known', id: hit[0] } : null;
 }
 
 function openKnown(id) {
+  if (MAC) {
+    if (id === 'explorer') return spawn('open', ['-a', 'Finder'], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+    if (id === 'recycle') return shell.openPath(path.join(os.homedir(), '.Trash'));
+    return shell.openPath(app.getPath(id));
+  }
   if (id === 'explorer') return spawn('explorer.exe', [], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
   if (id === 'recycle') return spawn('explorer.exe', ['shell:RecycleBinFolder'], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
   return shell.openPath(app.getPath(id));
@@ -201,6 +244,11 @@ async function launch({ kind, id } = {}) {
   if (!item) throw new Error('not found');
   if (kind === 'steam') return shell.openExternal(`steam://rungameid/${id}`);
   if (kind === 'epic') return shell.openExternal(`com.epicgames.launcher://apps/${encodeURIComponent(id)}?action=launch&silent=true`);
+  if (MAC) {
+    const err = await shell.openPath(id);
+    if (err) throw new Error(err);
+    return undefined;
+  }
   spawn('explorer.exe', [`shell:AppsFolder\\${id}`], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
   return undefined;
 }
@@ -213,12 +261,30 @@ const KEY_DOWN = 1; // KEYEVENTF_EXTENDEDKEY
 const KEY_UP = 3;   // ...and KEYEVENTF_KEYUP
 
 async function media(action) {
+  if (MAC) return macMedia(action);
   if (!WIN || !MEDIA[action]) return false;
   const [key, times] = MEDIA[action];
   return powershell(
     'Add-Type -Namespace Capri -Name Keys -MemberDefinition \'[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);\'; '
     + `1..${times} | ForEach-Object { [Capri.Keys]::keybd_event(${key}, 0, ${KEY_DOWN}, [UIntPtr]::Zero); [Capri.Keys]::keybd_event(${key}, 0, ${KEY_UP}, [UIntPtr]::Zero) }`,
   ).then(() => true, () => false);
+}
+
+// On a Mac the media keys aren't ours to press from a background app: volume goes through the
+// system, and play/pause and the rest through Spotify or Music, when one of them is running.
+function macMedia(action) {
+  if (!MAC) return false;
+  const run = (script) => new Promise((resolve) => {
+    execFile('osascript', ['-e', script], { timeout: 5000 }, (err) => resolve(!err));
+  });
+  if (action === 'mute') return run('set volume output muted not (output muted of (get volume settings))');
+  if (action === 'volup') return run('set volume output volume ((output volume of (get volume settings)) + 6.25)');
+  if (action === 'voldown') return run('set volume output volume ((output volume of (get volume settings)) - 6.25)');
+  const verb = { pause: 'playpause', play: 'playpause', next: 'next track', previous: 'previous track' }[action];
+  if (!verb) return false;
+  const player = ['Spotify', 'Music'].map((app) => `application "${app}"`);
+  // whichever one answers: a player that isn't running just errors, and the next one is tried
+  return run(`tell ${player[0]} to ${verb}`).then((ok) => ok || run(`tell ${player[1]} to ${verb}`));
 }
 
 // A Spotify search for it: in the app if it's installed, else on the web.
@@ -235,7 +301,7 @@ async function music(query) {
 
 // A song on YouTube, the exact video: the first result of a search (no key needed), opened in your
 // browser. { title } of what it found, or { title: null } when it could only open the search.
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 const VIDEO = /"videoRenderer":\{"videoId":"([\w-]{11})"[\s\S]*?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/;
 
 async function youtube(query) {

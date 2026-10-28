@@ -3,8 +3,12 @@
 # Capri
 
 Capri, the *Project Capricorn* construct from Cyberpunk: Edgerunners season 2, lives on your desktop
-and tells you what your coding AI is up to: **Claude Code**, **Codex** or **Antigravity**. She teleports,
+and tells you what your coding AI is up to: **Claude Code**, **Codex**, **Antigravity** or **OpenCode**. She teleports,
 glitches, comments on every action, comes to find you when it needs your permission, and loses it when the job is done.
+
+> **On macOS?** This fork runs natively on Apple Silicon and Intel. She lives in the menu bar (`⌘⌃C` tucks
+> her away), perches on your windows, and watches OpenCode through its plugin API. See **[MACOS.md](MACOS.md)**
+> for the macOS install, the permissions, and the build.
 
 ![Capri telling you Claude is done](docs/done.png)
 

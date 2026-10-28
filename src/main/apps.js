@@ -2,15 +2,21 @@
 
 // Closing an app when you ask her to (chat.js), after you've confirmed with a click. The apps with
 // a window, by name; closing one the way its own close button does (it can still ask you to save),
-// and only if you ask again, forcing it. Windows only.
+// and only if you ask again, forcing it.
 
+const path = require('node:path');
 const { execFile } = require('node:child_process');
+
+const MAC = process.platform === 'darwin';
 
 // never these: the desktop itself, Windows' own pieces, her (Capri), Claude (she watches it) and
 // Ollama (she talks through it)
 const KEEP = new Set([
   'explorer', 'applicationframehost', 'textinputhost', 'shellexperiencehost', 'startmenuexperiencehost',
   'searchhost', 'searchapp', 'lockapp', 'dwm', 'capri', 'electron', 'claude', 'codex', 'ollama', 'ollama app',
+  // macOS' own pieces
+  'finder', 'dock', 'systemuiserver', 'windowserver', 'loginwindow', 'controlcenter', 'notificationcenter',
+  'spotlight', 'opencode',
 ]);
 
 function powershell(script, timeout = 15000) {
@@ -24,6 +30,7 @@ function powershell(script, timeout = 15000) {
 
 // [{ name, process, ids }]: one per program with a window open ("AM Music", "Discord"...)
 async function list() {
+  if (MAC) return macList();
   if (process.platform !== 'win32') return [];
   const out = await powershell(
     'Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | '
@@ -39,6 +46,30 @@ async function list() {
     apps.set(name, app);
   }
   return [...apps.values()];
+}
+
+// The running apps that have a Dock presence or a window: their process path is inside their bundle.
+function macList() {
+  return new Promise((resolve) => {
+    execFile('ps', ['-axo', 'pid=,comm='], { timeout: 5000 }, (err, out) => {
+      if (err) return resolve([]);
+      const apps = new Map();
+      for (const line of String(out).split('\n')) {
+        const m = /^\s*(\d+)\s+(.+?\.app)\/Contents\/MacOS\//.exec(line);
+        if (!m) continue;
+        // only the apps you launched yourself: not the system's own agents, which live in
+        // /System/Library and would just be noise (and impossible to quit politely)
+        if (/^\/(System\/Library|usr|bin|sbin|Library|opt)\//.test(m[2])) continue;
+        if (m[2].includes('/Contents/Frameworks/')) continue; // an app's own helper processes
+        const name = path.basename(m[2], '.app');
+        if (KEEP.has(name.toLowerCase())) continue;
+        const app = apps.get(name) || { name, process: name, label: '', ids: [] };
+        app.ids.push(Number(m[1]));
+        apps.set(name, app);
+      }
+      resolve([...apps.values()]);
+    });
+  });
 }
 
 const simple = (text) => String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
@@ -64,6 +95,15 @@ async function find(wanted) {
 async function close(name, { force = false } = {}) {
   const app = (await list()).find((a) => a.process === name);
   if (!app) return { running: false };
+  if (MAC) {
+    // the same polite quit as its own menu (SIGTERM), or an outright end when asked twice
+    for (const id of app.ids) {
+      try { process.kill(id, force ? 'SIGKILL' : 'SIGTERM'); } catch { /* gone already */ }
+    }
+    await new Promise((r) => setTimeout(r, force ? 600 : 2500));
+    const left = (await list()).find((a) => a.process === name);
+    return { running: Boolean(left) };
+  }
   const ids = app.ids.join(',');
   const out = await powershell(force
     ? `Stop-Process -Id ${ids} -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 600; `

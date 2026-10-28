@@ -7,3 +7,7 @@ Thumbs.db
 
 # local debug captures
 captures/
+
+# the Swift window helper, built on install
+build/
+.npm-cache/

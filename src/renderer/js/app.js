@@ -13,7 +13,7 @@ import { Bond, Jealousy } from './bond.js';
 import { Reminders, clock } from './reminders.js';
 import { Look } from './look.js';
 import { Pc } from './pc.js';
-import { linesFor } from './lines.js';
+import { linesFor, setPlatform } from './lines.js';
 import { pick, fmt, reducedMotion } from './util.js';
 
 const host = window.host;
@@ -75,6 +75,7 @@ async function boot() {
   voice.configure(config);
   host.listSounds().then((list) => list.length && voice.loadCustom(list));
 
+  setPlatform({ shortcut: config.shortcut, mac: config.mac });
   const panel = new Panel({
     panel: document.getElementById('panel'),
     ticker: document.getElementById('ticker'),
@@ -617,6 +618,7 @@ async function boot() {
     brain.watching = cfg.claude !== false;
     brain.custom = mine(cfg);
     brain.assistant = cfg.assistant;
+    setPlatform({ shortcut: cfg.shortcut, mac: cfg.mac });
     panel.labels = linesFor(cfg.lang, cfg.assistant);
     if (cfg.scale !== capri.scale) capri.setScale(cfg.scale);
     if (cfg.lang !== brain.lang) {

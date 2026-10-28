@@ -1,13 +1,16 @@
 'use strict';
 
 // Finding your files when you ask her ("trouve mon CV", "where's my report"). Windows' search
-// index first: your whole user folder, by name and by what's in the files, in a blink. If it's off,
-// a walk through your usual folders, by name. Then a screenshot when you ask for one.
+// index first, or Spotlight's on a Mac: your whole user folder, in a blink. If it's off, a walk
+// through your usual folders, by name. Then a screenshot when you ask for one.
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { app, shell, desktopCapturer, screen } = require('electron');
 const { powershell } = require('./apps');
+const { execFile } = require('node:child_process');
+
+const MAC = process.platform === 'darwin';
 
 const LIMIT = 8;
 const found = new Set(); // what a search showed you: the only paths she opens from here
@@ -16,14 +19,15 @@ const words = (query) => String(query || '').toLowerCase().normalize('NFKD').rep
   .split(/[^\p{L}\p{N}.]+/u).filter((w) => w.length >= 2).slice(0, 5);
 
 // never in the results: code dependencies, app data, git internals
-const JUNK = ['node_modules', '\\AppData\\', '\\.git\\', '\\site-packages\\', '\\$Recycle.Bin\\'];
-const junk = (p) => JUNK.some((j) => p.includes(j));
+const JUNK = [/node_modules/, /[\\/]AppData[\\/]/, /[\\/]\.git[\\/]/, /site-packages/, /\$Recycle\.Bin/, /[\\/]\.Trash[\\/]/, /Library\/Caches/];
+const junk = (p) => JUNK.some((re) => re.test(p));
 // files that are code, left out of a search by what's inside (any word shows up in some library)
 const CODE = ['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'json', 'map', 'lock', 'yml', 'yaml', 'py', 'css', 'html', 'md', 'txt', 'xml', 'log'];
 
 // Windows Search: names first (every word in the name, of one of `exts` if any), then what's in
 // documents (not code). null if the index can't be asked.
 async function indexed(terms, exts) {
+  if (MAC) return spotlit(terms, exts);
   const safe = terms.map((t) => t.replace(/[^\p{L}\p{N}.]/gu, '')).filter(Boolean);
   const types = exts.map((e) => e.replace(/[^a-z0-9]/gi, '')).filter(Boolean);
   if (!safe.length && !types.length) return [];
@@ -48,11 +52,31 @@ async function indexed(terms, exts) {
   return [...new Set(paths.map((l) => decodeURIComponent(l.slice(5)).replace(/\//g, '\\')))];
 }
 
+// Spotlight (mdfind): by name, every word in it, of one of `exts` when that's what was asked.
+// null if Spotlight can't be asked (it's off, for one).
+function spotlit(terms, exts) {
+  const safe = terms.map((t) => t.replace(/[^\p{L}\p{N}.]/gu, '')).filter(Boolean);
+  const types = exts.map((e) => e.replace(/[^a-z0-9]/gi, '')).filter(Boolean);
+  if (!safe.length && !types.length) return Promise.resolve([]);
+  const escape = (t) => t.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const clauses = [
+    ...safe.map((t) => `kMDItemFSName == "*${escape(t)}*"cd`),
+    ...types.map((e) => `kMDItemFSName == "*.${escape(e)}"cd`),
+  ];
+  return new Promise((resolve) => {
+    execFile('mdfind', ['-onlyin', app.getPath('home'), clauses.join(' && ')], { timeout: 10000, maxBuffer: 4 * 1024 * 1024 }, (err, out) => {
+      if (err) return resolve(null);
+      resolve(String(out).split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 400));
+    });
+  });
+}
+
 // The walk, when the index isn't there: your usual folders, a few levels down, by name and type.
 function walked(terms, exts) {
   const roots = ['desktop', 'documents', 'downloads', 'pictures', 'music', 'videos'].map((k) => app.getPath(k));
   const onedrive = process.env.OneDrive;
   if (onedrive) roots.push(onedrive);
+  if (MAC) roots.push(path.join(app.getPath('home'), 'Library', 'Mobile Documents', 'com~apple~CloudDocs'));
   const hits = [];
   const queue = roots.map((dir) => [dir, 0]);
   let seen = 0;

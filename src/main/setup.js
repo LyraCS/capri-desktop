@@ -1,9 +1,9 @@
 'use strict';
 
 // Setting her up with buttons, so nobody has to type in a terminal: Ollama (installed with winget,
-// woken up, a model fetched with its progress), an API key pasted in her panel (kept encrypted with
-// your Windows account), and Claude Code or Codex run through Ollama in a window of their own.
-// Windows; elsewhere the buttons open the right pages instead.
+// or downloaded from its site on a Mac; woken up; a model fetched with its progress), an API key
+// pasted in her panel (kept encrypted with your account), and Claude Code or Codex run through
+// Ollama in a window of their own.
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -13,6 +13,7 @@ const { safeStorage } = require('electron');
 const ollama = require('./ollama');
 
 const WIN = process.platform === 'win32';
+const MAC = process.platform === 'darwin';
 
 // The models she offers for her chat, with what they weigh (as Ollama lists them)
 const MODELS = [
@@ -39,6 +40,7 @@ function which(cmd) {
 
 // Ollama's own app (it runs the server from the tray) and its command, where its installer puts them
 function ollamaFiles() {
+  if (MAC) return { app: '/Applications/Ollama.app', cli: '/usr/local/bin/ollama' };
   const dir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'Ollama');
   return { app: path.join(dir, 'ollama app.exe'), cli: path.join(dir, 'ollama.exe') };
 }
@@ -48,11 +50,16 @@ async function ollamaState() {
   const models = await ollama.models().catch(() => null);
   if (models) return { running: true, installed: true, models, winget: false };
   const [onPath, winget] = await Promise.all([which('ollama'), WIN ? which('winget') : null]);
-  return { running: false, installed: fs.existsSync(ollamaFiles().cli) || Boolean(onPath), models: null, winget: Boolean(winget) };
+  const installed = MAC
+    ? fs.existsSync('/Applications/Ollama.app') || Boolean(onPath)
+    : fs.existsSync(ollamaFiles().cli) || Boolean(onPath);
+  // on a Mac there's no package manager to trust with it: she opens Ollama's download page instead
+  return { running: false, installed, models: null, winget: MAC ? false : Boolean(winget) };
 }
 
 // Installs Ollama with winget (Windows' own package manager); onLine(text) for what it prints.
 function installOllama(onLine) {
+  if (MAC) return Promise.resolve({ ok: false, error: 'download it from ollama.com' });
   return new Promise((resolve) => {
     const child = spawn('winget', [
       'install', '--id', 'Ollama.Ollama', '--exact', '--silent',
@@ -71,7 +78,10 @@ function installOllama(onLine) {
 async function startOllama() {
   const { app, cli } = ollamaFiles();
   const run = (file, args) => spawn(file, args, { detached: true, stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref();
-  if (fs.existsSync(app)) run(app, []);
+  if (MAC) {
+    if (fs.existsSync(app)) run('open', ['-a', 'Ollama']);
+    else run(fs.existsSync(cli) ? cli : 'ollama', ['serve']);
+  } else if (fs.existsSync(app)) run(app, []);
   else run(fs.existsSync(cli) ? cli : 'ollama', ['serve']);
   for (let i = 0; i < 40; i++) {
     if (await ollama.models().catch(() => null)) return { ok: true };
@@ -118,8 +128,18 @@ async function pullModel(name, onProgress, signal) {
 // Claude Code (or Codex) through Ollama, in a window of its own: Ollama fetches what's missing and
 // asks which model to use. She sees it like any other session, through her hooks.
 function launchThroughOllama(integration) {
-  if (!WIN || !['claude', 'codex'].includes(integration)) return { ok: false };
+  if (!['claude', 'codex'].includes(integration)) return { ok: false };
   const { cli } = ollamaFiles();
+  if (MAC) {
+    // a Terminal window of its own (macOS asks once whether Capri may drive Terminal)
+    const command = `${fs.existsSync(cli) ? cli : 'ollama'} launch ${integration}`;
+    spawn('osascript', [
+      '-e', `tell application "Terminal" to do script "${command}"`,
+      '-e', 'tell application "Terminal" to activate',
+    ], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+    return { ok: true };
+  }
+  if (!WIN) return { ok: false };
   // `start` opens a new console window (its first quoted argument is the window's title); cmd /k
   // strips the outer quotes of what follows, so a path with spaces in it keeps its own
   const command = `""${fs.existsSync(cli) ? cli : 'ollama'}" launch ${integration}"`;

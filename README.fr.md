@@ -6,6 +6,10 @@ Capri, le construct du *Project Capricorn* (Cyberpunk: Edgerunners, saison 2), v
 et te raconte ce que fait ton IA de code, **Claude Code**, **Codex** ou **Antigravity** : elle se téléporte,
 glitche, commente chaque action, vient te chercher quand elle attend ta permission et part en vrille quand la tâche est finie.
 
+> **Sur macOS ?** Ce fork tourne nativement sur Apple Silicon et Intel. Elle vit dans la barre des menus
+> (`⌘⌃C` la range), s'assoit sur tes fenêtres, et surveille OpenCode via son API de plugins. Voir
+> **[MACOS.md](MACOS.md)** pour l'installation, les autorisations et le build.
+
 ![Capri annonce que Claude a terminé](docs/done.png)
 
 ![Téléportation, image par image](docs/teleport.png)

@@ -7,7 +7,7 @@
   "main": "src/main/main.js",
   "private": true,
   "scripts": {
-    "start": "electron .",
+    "start": "node scripts/build-mac-helper.js && electron .",
     "dev": "electron . --dev",
     "demo": "node scripts/demo.js",
     "hooks:install": "node scripts/install-hooks.js",
@@ -18,7 +18,12 @@
     "hooks:agy:uninstall": "node scripts/install-hooks-agy.js --uninstall",
     "check:llm": "node scripts/check-llm.js",
     "test:hooks": "node --test tests/hooks.test.js",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "build:mac": "node scripts/build-mac-helper.js",
+    "hooks:opencode:install": "node scripts/install-opencode-plugin.js",
+    "hooks:opencode:uninstall": "node scripts/install-opencode-plugin.js --uninstall",
+    "test:opencode": "node --test tests/opencode.test.js",
+    "dist:mac": "node scripts/build-mac-helper.js && electron-builder --mac"
   },
   "keywords": [
     "claude-code",
@@ -65,6 +70,29 @@
       "createDesktopShortcut": true,
       "shortcutName": "Capri",
       "artifactName": "Capri-Setup-${version}.${ext}"
-    }
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.entertainment",
+      "icon": "assets/icons/capri.icns",
+      "identity": null,
+      "extendInfo": {
+        "LSUIElement": true
+      }
+    },
+    "extraResources": [
+      {
+        "from": "build/capri-windows",
+        "to": "capri-windows"
+      }
+    ],
+    "dmg": {
+      "artifactName": "Capri-${version}-${arch}.${ext}",
+      "title": "Capri"
+    },
+    "artifactName": "Capri-${version}-${arch}.${ext}"
   }
 }
