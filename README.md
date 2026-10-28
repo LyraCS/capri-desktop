@@ -6,9 +6,10 @@ Capri, the *Project Capricorn* construct from Cyberpunk: Edgerunners season 2, l
 and tells you what your coding AI is up to: **Claude Code**, **Codex**, **Antigravity** or **OpenCode**. She teleports,
 glitches, comments on every action, comes to find you when it needs your permission, and loses it when the job is done.
 
-> **On macOS?** This fork runs natively on Apple Silicon and Intel. She lives in the menu bar (`⌘⌃C` tucks
-> her away), perches on your windows, and watches OpenCode through its plugin API. See **[MACOS.md](MACOS.md)**
-> for the macOS install, the permissions, and the build.
+> **On macOS?** This fork runs natively on Apple Silicon (and Intel, built from source). She lives in the menu
+> bar (`⌘⌃C` tucks her away), perches on your windows, rests on the Dock, and watches OpenCode through its
+> plugin API. **[Download the macOS release](https://github.com/LyraCS/capri-desktop/releases/latest)**; see
+> **[MACOS.md](MACOS.md)** for the details, the permissions, and the build.
 
 ![Capri telling you Claude is done](docs/done.png)
 
@@ -279,6 +280,27 @@ own. You can choose another one in her menu.
 
 Her menu: **right-click her**. It's also on her tray icon, which Windows 11 often hides behind the **^** next to the clock.
 
+### Quick start (macOS, Apple Silicon)
+
+1. Download **`Capri-1.0.0-arm64.dmg`** from [this fork's latest release](https://github.com/LyraCS/capri-desktop/releases/latest)
+   and open it, then drag **Capri** into **Applications**.
+2. The build is signed ad-hoc, not notarized, so macOS blocks the first launch: right-click **Capri** in
+   Applications › **Open** › **Open**. If it still refuses, System Settings › Privacy & Security › **Open Anyway**,
+   or clear the flag once in a terminal:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Capri.app
+   ```
+
+3. She appears in the **menu bar** (her face, top right), not in the Dock. Click her icon for her menu; `⌘⌃C`
+   tucks her away.
+4. **OpenCode:** menu › **Watch › OpenCode**, then menu › **Install OpenCode hooks**, and restart OpenCode.
+   **Claude Code:** menu › **Install Claude Code hooks**, then restart Claude Code.
+5. **Chat** needs a model: menu › **AI model** › pick a provider and paste a key. Any OpenAI-compatible endpoint
+   works (see [MACOS.md](MACOS.md)).
+
+macOS 13 or newer. The release is built for Apple Silicon; on an Intel Mac, build it from the source (below).
+
 ### What's Claude Code? Do I need it?
 
 [Claude Code](https://code.claude.com/docs/en/quickstart) is Anthropic's coding assistant: in a terminal, in VS Code,
@@ -290,18 +312,21 @@ asleep. You can just leave her there.
 
 ### From the source (macOS, Linux, developers)
 
-You need [Node.js](https://nodejs.org) 20 or newer.
+You need [Node.js](https://nodejs.org) 20 or newer. On a Mac you also need the Command Line Tools
+(`xcode-select --install`) for the small Swift helper that follows your windows (she runs without it, just without
+perching).
 
 ```bash
-git clone https://github.com/mochiiwuff/capri-desktop.git
+git clone https://github.com/LyraCS/capri-desktop.git
 cd capri-desktop
 npm install
 npm start
 ```
 
-Keep that terminal open while she runs. Not tested on macOS or Linux yet: she should start, but the window tricks
-(sitting on your windows, possessing them, showing Claude's answer when you're elsewhere) are Windows-only, and on Linux
-the transparent overlay works best on X11 (Wayland can struggle with click-through windows).
+Keep that terminal open while she runs. On macOS everything works, the window tricks and the Dock included
+(see [MACOS.md](MACOS.md)); `npm run dist:mac` builds the `.dmg`. On Linux she starts, but the window tricks
+(sitting on your windows, possessing them, showing Claude's answer when you're elsewhere) are Windows and macOS only,
+and the transparent overlay works best on X11 (Wayland can struggle with click-through windows).
 
 ### Hook her up to Claude Code by hand
 

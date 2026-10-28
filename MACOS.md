@@ -1,10 +1,23 @@
 # Capri on macOS
 
 This is the macOS port of [capri-desktop](https://github.com/mochiiwuff/capri-desktop). Same Electron app,
-same sprites, same brain: it runs natively on Apple Silicon (and Intel), perches on your windows, and can
-watch **OpenCode** as well as Claude Code, Codex and Antigravity.
+same sprites, same brain: it runs natively on Apple Silicon (Intel Macs build from source), perches on your
+windows, and can watch **OpenCode** as well as Claude Code, Codex and Antigravity.
 
 Tested on an M2 MacBook Air (8 GB) running macOS 27. She is a menu bar app: no Dock icon, `⌘⌃C` tucks her away.
+
+## Install the release
+
+Download **`Capri-1.0.0-arm64.dmg`** from the [latest release](https://github.com/LyraCS/capri-desktop/releases/latest),
+open it, and drag **Capri** into **Applications**. macOS 13 or newer, Apple Silicon.
+
+The build is ad-hoc signed, not notarized, so macOS blocks the first launch: right-click **Capri** in
+Applications › **Open** › **Open** (or System Settings › Privacy & Security › **Open Anyway**). In a terminal,
+clearing the flag once works too:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Capri.app
+```
 
 ## Run it from the source
 

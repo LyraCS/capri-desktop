@@ -21,8 +21,11 @@ if (fresh && !process.argv.includes('--force')) {
 }
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
+// the same Macs as the app (Electron 44 wants macOS 13): without a target, swiftc asks for the
+// build machine's own version and the helper won't start on anything older
+const target = `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macos13.0`;
 try {
-  execFileSync('swiftc', ['-O', '-o', OUT, SOURCE], { stdio: 'inherit' });
+  execFileSync('swiftc', ['-O', '-target', target, '-o', OUT, SOURCE], { stdio: 'inherit' });
   console.log('[capri] window helper built:', path.relative(ROOT, OUT));
 } catch (err) {
   console.error('[capri] could not build the window helper (no Command Line Tools?):', err.message);

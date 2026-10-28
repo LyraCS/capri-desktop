@@ -6,9 +6,10 @@ Capri, le construct du *Project Capricorn* (Cyberpunk: Edgerunners, saison 2), v
 et te raconte ce que fait ton IA de code, **Claude Code**, **Codex** ou **Antigravity** : elle se téléporte,
 glitche, commente chaque action, vient te chercher quand elle attend ta permission et part en vrille quand la tâche est finie.
 
-> **Sur macOS ?** Ce fork tourne nativement sur Apple Silicon et Intel. Elle vit dans la barre des menus
-> (`⌘⌃C` la range), s'assoit sur tes fenêtres, et surveille OpenCode via son API de plugins. Voir
-> **[MACOS.md](MACOS.md)** pour l'installation, les autorisations et le build.
+> **Sur macOS ?** Ce fork tourne nativement sur Apple Silicon (et Intel, en compilant depuis le code). Elle vit dans
+> la barre des menus (`⌘⌃C` la range), s'assoit sur tes fenêtres, se pose sur le Dock, et surveille OpenCode via
+> son API de plugins. **[Télécharger la version macOS](https://github.com/LyraCS/capri-desktop/releases/latest)** ;
+> voir **[MACOS.md](MACOS.md)** pour les détails, les autorisations et le build.
 
 ![Capri annonce que Claude a terminé](docs/done.png)
 
@@ -295,6 +296,28 @@ système. Tu peux en choisir une autre dans son menu.
 Son menu : **clic droit sur elle**. Il est aussi sur son icône, que Windows 11 cache souvent derrière le **^** à côté
 de l'horloge.
 
+### Démarrage rapide (macOS, Apple Silicon)
+
+1. Télécharge **`Capri-1.0.0-arm64.dmg`** dans la [dernière release de ce fork](https://github.com/LyraCS/capri-desktop/releases/latest),
+   ouvre-le, et glisse **Capri** dans **Applications**.
+2. Le build est signé ad hoc, pas notarié : macOS bloque le premier lancement. Clic droit sur **Capri** dans
+   Applications › **Ouvrir** › **Ouvrir**. S'il refuse encore : Réglages Système › Confidentialité et sécurité ›
+   **Ouvrir quand même**, ou retire le drapeau une fois dans un terminal :
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Capri.app
+   ```
+
+3. Elle apparaît dans la **barre des menus** (son visage, en haut à droite), pas dans le Dock. Clique sur son icône
+   pour son menu ; `⌘⌃C` la range.
+4. **OpenCode :** menu › **Surveiller › OpenCode**, puis menu › **Installer les hooks OpenCode**, et relance OpenCode.
+   **Claude Code :** menu › **Installer les hooks Claude Code**, puis relance Claude Code.
+5. **Le chat** a besoin d'un modèle : menu › **Modèle IA** › choisis un service et colle une clé. N'importe quel
+   endpoint compatible OpenAI marche (voir [MACOS.md](MACOS.md)).
+
+macOS 13 ou plus récent. La release est compilée pour Apple Silicon ; sur un Mac Intel, compile-la depuis le code
+(ci-dessous).
+
 ### C'est quoi Claude Code ? Il le faut ?
 
 [Claude Code](https://code.claude.com/docs/en/quickstart) est l'assistant de code d'Anthropic : dans un terminal, dans
@@ -306,18 +329,21 @@ s'endort. Tu peux juste la laisser là.
 
 ### Depuis le code (macOS, Linux, développeurs)
 
-Il faut [Node.js](https://nodejs.org) 20 ou plus.
+Il faut [Node.js](https://nodejs.org) 20 ou plus. Sur un Mac, il faut aussi les Command Line Tools
+(`xcode-select --install`) pour le petit helper Swift qui suit tes fenêtres (elle tourne sans, juste sans s'asseoir
+dessus).
 
 ```bash
-git clone https://github.com/mochiiwuff/capri-desktop.git
+git clone https://github.com/LyraCS/capri-desktop.git
 cd capri-desktop
 npm install
 npm start
 ```
 
-Garde ce terminal ouvert tant qu'elle tourne. Pas encore testé sur macOS ni Linux : elle devrait démarrer, mais les tours
-avec les fenêtres (s'asseoir dessus, les posséder, t'afficher la réponse de Claude quand tu es ailleurs) ne marchent que
-sous Windows, et sous Linux le calque transparent marche mieux sous X11 (Wayland a du mal avec les fenêtres qui laissent
+Garde ce terminal ouvert tant qu'elle tourne. Sur macOS tout marche, les tours avec les fenêtres et le Dock compris
+(voir [MACOS.md](MACOS.md)) ; `npm run dist:mac` construit le `.dmg`. Sous Linux elle démarre, mais les tours avec les
+fenêtres (s'asseoir dessus, les posséder, t'afficher la réponse de Claude quand tu es ailleurs) ne marchent que sous
+Windows et macOS, et le calque transparent marche mieux sous X11 (Wayland a du mal avec les fenêtres qui laissent
 passer les clics).
 
 ### La brancher sur Claude Code à la main
