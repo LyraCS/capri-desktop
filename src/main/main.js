@@ -271,8 +271,12 @@ function boxAnchor() {
 }
 
 function sendBoxAnchor() {
-  const at = boxAnchor();
-  if (at) sendCommand('box', { on: true, ...at });
+  if (!box || box.isDestroyed() || !overlay) return;
+  const b = box.getBounds();
+  const o = overlay.getBounds();
+  const rect = { x: b.x - o.x, y: b.y - o.y, w: b.width, h: b.height };
+  // the point her panel hangs by (the tile's bottom middle), and the tile itself for its side
+  sendCommand('box', { on: true, x: rect.x + rect.w / 2, y: rect.y + rect.h - 6, rect });
 }
 
 function sendToBox(channel, payload) {
@@ -321,6 +325,7 @@ function createBox() {
     }, 350);
   });
   box.on('closed', () => { box = null; });
+  overlay?.webContents.on('did-finish-load', () => { if (facecamUp) sendBoxAnchor(); });
   box.webContents.on('did-finish-load', () => {
     sendBoxAnchor();
     sendToBox('music:update', music.get());
@@ -1397,6 +1402,15 @@ function main() {
       lastWake = Date.now();
       sendCommand('wake', { back: true });
       sendToBox('box:wake');
+      // the screen has been through a lot: put her tile back up, at its level, where it was
+      setTimeout(() => {
+        if (!box || box.isDestroyed()) return;
+        box.setAlwaysOnTop(true, 'floating');
+        if (facecamUp) {
+          box.showInactive();
+          sendBoxAnchor();
+        }
+      }, 1200);
     };
     powerMonitor.on('lock-screen', () => { sendCommand('sleep'); sendToBox('box:sleep'); });
     powerMonitor.on('suspend', () => sendCommand('sleep'));

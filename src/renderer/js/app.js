@@ -675,10 +675,11 @@ async function boot() {
       case 'goScreen': // a screen picked in her menu: she goes there
         goToScreen(cmd.id);
         break;
-      case 'box': { // her mini-box is up: the overlay keeps her panel, box.js draws her
+      case 'box': { // her facecam is up: the overlay keeps her panel, box.html draws her
         const on = Boolean(cmd.on);
         document.documentElement.dataset.boxed = on ? 'on' : 'off';
         capri.wander = on ? false : config.wander;
+        panel.setBox(on && cmd.rect ? cmd.rect : null);
         if (on && Number.isFinite(cmd.x) && Number.isFinite(cmd.y)) {
           capri.pos = { x: cmd.x, y: cmd.y };
           capri.place();
@@ -692,6 +693,13 @@ async function boot() {
         break;
       case 'wake': // and you're back
         capri.wake();
+        // a GPU reset while asleep can leave her canvas dead (Chromium doesn't always hand the
+        // context back): she'd be a voice with no body. Start the page over if it's still lost.
+        if (capri.sprite.gl?.isContextLost?.()) {
+          setTimeout(() => {
+            if (capri.sprite.gl?.isContextLost?.()) location.reload();
+          }, 1500);
+        }
         if (cmd.back) pc.say(pick(pc.t.back), 'laugh', 4000);
         break;
       case 'screens': // a screen plugged in, unplugged or moved

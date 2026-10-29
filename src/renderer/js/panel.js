@@ -563,6 +563,7 @@ export class Panel {
 
   // Sit on the tips of her mane, leaning toward the middle of the screen; tail points at her.
   place() {
+    if (this.box) return this.placeOnBox();
     const { x, y, top: crown = y - 80, lean = 0 } = this.anchor;
     const { w } = this.view;
     const margin = 14;
@@ -590,6 +591,53 @@ export class Panel {
       const tw = this.tickerEl.offsetWidth;
       const left = clamp(x - tw / 2, margin, w - tw - margin);
       const top = Math.max(margin, crown - this.tickerEl.offsetHeight - 10);
+      this.tickerEl.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+    }
+  }
+
+  // Her facecam is up (main.js): the panel hangs above the tile, or beside it when there's no room,
+  // its tail on the tile, never over it.
+  setBox(rect) {
+    this.box = rect || null;
+    this.place();
+  }
+
+  placeOnBox() {
+    const b = this.box;
+    const { w, h } = this.view;
+    const margin = 14;
+    const gap = 12;
+
+    if (!this.el.hidden) {
+      const pw = this.el.offsetWidth;
+      const ph = this.el.offsetHeight;
+      let left;
+      let top;
+      let tail;
+      let below = false;
+      if (b.y - gap - ph >= margin) {
+        // above the tile, tail down at its middle
+        top = b.y - gap - ph;
+        left = clamp(b.x + b.w / 2 - pw / 2, margin, w - pw - margin);
+        tail = b.x + b.w / 2;
+      } else {
+        // beside it, on the side with room, tail at its bottom corner
+        const roomRight = w - (b.x + b.w) - margin;
+        const right = roomRight > pw + gap;
+        left = right ? b.x + b.w + gap : Math.max(margin, b.x - pw - gap);
+        top = clamp(b.y + b.h / 2 - ph / 2, margin, h - ph - margin);
+        tail = right ? left + 26 : left + pw - 26;
+        below = b.y + b.h / 2 < top + ph / 2;
+      }
+      this.el.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+      this.el.style.setProperty('--tail-x', `${clamp(tail - left, 24, pw - 24)}px`);
+      this.el.dataset.below = below ? 'true' : 'false';
+    }
+
+    if (!this.tickerEl.hidden) {
+      const tw = this.tickerEl.offsetWidth;
+      const left = clamp(b.x + b.w / 2 - tw / 2, margin, w - tw - margin);
+      const top = Math.max(margin, b.y - this.tickerEl.offsetHeight - 10);
       this.tickerEl.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
     }
   }
