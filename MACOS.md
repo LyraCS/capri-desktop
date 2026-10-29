@@ -8,8 +8,8 @@ Tested on an M2 MacBook Air (8 GB) running macOS 27. She is a menu bar app: no D
 
 ## Install the release
 
-Download **`Capri-1.0.0-arm64.dmg`** from the [latest release](https://github.com/LyraCS/capri-desktop/releases/latest),
-open it, and drag **Capri** into **Applications**. macOS 13 or newer, Apple Silicon.
+Download the latest `.dmg` (Apple Silicon) from the [latest release](https://github.com/LyraCS/capri-desktop/releases/latest),
+open it, and drag **Capri** into **Applications**. macOS 13 or newer.
 
 The build is ad-hoc signed, not notarized, so macOS blocks the first launch: right-click **Capri** in
 Applications › **Open** › **Open** (or System Settings › Privacy & Security › **Open Anyway**). In a terminal,
@@ -119,7 +119,13 @@ understands (prompts, tool calls, permission prompts, turn ends, interrupts) and
 
 ## Chat
 
-Her chat works with any OpenAI-compatible endpoint, no Ollama required:
+Her chat works with any OpenAI-compatible endpoint, no Ollama required.
+
+**9Router**, if it's running on this Mac (dashboard at `http://localhost:20128/dashboard`): menu › **AI model ›
+9Router (local)**, paste one of its keys, and she picks a model that actually answers (change it in the same menu).
+Connect the providers you want in its dashboard first: without one, none of its models can answer.
+
+Anything else that speaks OpenAI:
 
 menu › **AI model › Custom (customUrl in config)**, then **API key or address…** and paste:
 

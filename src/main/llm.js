@@ -15,6 +15,9 @@ const PROVIDERS = {
   ollama: { label: 'Ollama (local)', kind: 'ollama', local: true },
   lmstudio: { label: 'LM Studio (local)', url: 'http://127.0.0.1:1234/v1', local: true },
   llamacpp: { label: 'llama.cpp / vLLM (local :8080)', url: 'http://127.0.0.1:8080/v1', local: true },
+  // a router on this Mac that forwards to the providers you connect in it (its models are "provider/model"):
+  // it takes a key of its own, and what you write still leaves the Mac once it's forwarded
+  router9: { label: '9Router (local)', url: 'http://127.0.0.1:20128/v1', env: 'NINEROUTER_API_KEY' },
   pollinations: {
     label: 'Pollinations (no key)', url: 'https://text.pollinations.ai/openai', modelsUrl: 'https://text.pollinations.ai/models',
   },
@@ -215,6 +218,31 @@ async function chat(id, cfg, { model, messages }, onDelta, signal) {
   return openaiChat(p, { model, messages }, onDelta, signal);
 }
 
+// A router lists models it can't answer with (one that isn't a chat model, one its provider has retired):
+// a one-token question to each until one answers, so she doesn't start on a dead one. Null when none did.
+async function firstWorking(id, cfg, names, budgetMs = 25000) {
+  const p = endpoint(id, cfg);
+  const deadline = Date.now() + budgetMs;
+  for (const model of names) {
+    if (Date.now() >= deadline) break;
+    try {
+      const res = await fetch(`${p.url}/chat/completions`, {
+        method: 'POST',
+        headers: headers(p.key),
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
+        signal: AbortSignal.timeout(Math.max(1000, Math.min(10000, deadline - Date.now()))),
+      });
+      if (res.ok) {
+        res.body?.cancel().catch(() => {}); // the answer isn't needed, just that there is one
+        return model;
+      }
+    } catch {
+      // no answer, or too slow: the next one
+    }
+  }
+  return null;
+}
+
 // Whether her answers stay on this PC: a server on this machine (and with Ollama, not a cloud model).
 function isLocal(id, cfg, model) {
   if (id === 'ollama') {
@@ -224,4 +252,4 @@ function isLocal(id, cfg, model) {
   return Boolean(PROVIDERS[id].local);
 }
 
-module.exports = { isLocal, PROVIDERS, CLAUDE_MODES, models, warm, chat, resetClaude, isChatSession, claudeMemory, restoreClaude };
+module.exports = { isLocal, PROVIDERS, CLAUDE_MODES, models, warm, chat, firstWorking, resetClaude, isChatSession, claudeMemory, restoreClaude };

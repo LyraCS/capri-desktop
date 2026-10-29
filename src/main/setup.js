@@ -29,6 +29,7 @@ const KEY_PAGES = {
   openai: 'https://platform.openai.com/api-keys',
   mistral: 'https://console.mistral.ai/api-keys',
   deepseek: 'https://platform.deepseek.com/api_keys',
+  router9: 'http://localhost:20128/dashboard',
 };
 
 function which(cmd) {

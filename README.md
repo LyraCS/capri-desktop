@@ -164,7 +164,8 @@ The first time, she sets it up with you, with buttons, no terminal:
   that service.
 
 Her menu › **AI model** lets you switch later: **Set it up with her…**, or straight to a service and a model, LM Studio
-(`:1234`), llama.cpp or vLLM (`:8080`), any OpenAI-compatible server (**API key or address…**), or **Claude Code**
+(`:1234`), llama.cpp or vLLM (`:8080`), 9Router (`:20128`, a local router in front of the providers you connect in
+it), any OpenAI-compatible server (**API key or address…**), or **Claude Code**
 itself: your messages go to `claude -p` in the folder you pick, continuing one conversation, and her hooks show what it
 does. In that last one, permission mode `default` only lets it read (nobody is there to say yes); `acceptEdits` lets it
 edit files without asking. **Forget our conversations** clears what she remembers of your chats.
@@ -282,7 +283,7 @@ Her menu: **right-click her**. It's also on her tray icon, which Windows 11 ofte
 
 ### Quick start (macOS, Apple Silicon)
 
-1. Download **`Capri-1.0.0-arm64.dmg`** from [this fork's latest release](https://github.com/LyraCS/capri-desktop/releases/latest)
+1. Download **Capri** (the `.dmg`, Apple Silicon) from [this fork's latest release](https://github.com/LyraCS/capri-desktop/releases/latest)
    and open it, then drag **Capri** into **Applications**.
 2. The build is signed ad-hoc, not notarized, so macOS blocks the first launch: right-click **Capri** in
    Applications › **Open** › **Open**. If it still refuses, System Settings › Privacy & Security › **Open Anyway**,

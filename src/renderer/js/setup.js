@@ -6,8 +6,11 @@
 import { fmt } from './util.js';
 
 // the services that take a key, in the order she offers them (the first two have a free tier)
-const KEYED = ['groq', 'gemini', 'openrouter', 'openai', 'mistral', 'deepseek'];
-const NAMES = { groq: 'Groq', gemini: 'Gemini', openrouter: 'OpenRouter', openai: 'OpenAI', mistral: 'Mistral', deepseek: 'DeepSeek' };
+const KEYED = ['groq', 'gemini', 'openrouter', 'openai', 'mistral', 'deepseek', 'router9'];
+const NAMES = {
+  groq: 'Groq', gemini: 'Gemini', openrouter: 'OpenRouter', openai: 'OpenAI', mistral: 'Mistral', deepseek: 'DeepSeek',
+  router9: '9Router',
+};
 const ROOMY = 12 * 2 ** 30; // enough memory for the bigger model
 
 export class Setup {
@@ -216,7 +219,7 @@ export class Setup {
     const got = await this.guide.askText({
       face: error ? 'wide' : 'look',
       line: fmt(t.paste, { name: NAMES[provider] || provider }),
-      quote: error ? `${t.keyBad} ${error}` : t.pasteHow,
+      quote: error ? `${t.keyBad} ${error}` : provider === 'router9' ? t.router9How : t.pasteHow,
       secret: true,
       placeholder: t.placeholder,
       tag: t.keyTag,

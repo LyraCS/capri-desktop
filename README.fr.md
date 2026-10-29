@@ -172,7 +172,8 @@ La première fois, elle règle tout avec toi, avec des boutons, sans terminal :
   part que vers ce service.
 
 Son menu › **Modèle IA** pour changer plus tard : **Choisir avec elle…**, ou directement un service et un modèle,
-LM Studio (`:1234`), llama.cpp ou vLLM (`:8080`), n'importe quel serveur compatible OpenAI (**Clé API ou
+LM Studio (`:1234`), llama.cpp ou vLLM (`:8080`), 9Router (`:20128`, un routeur local devant les fournisseurs que tu
+y connectes), n'importe quel serveur compatible OpenAI (**Clé API ou
 adresse…**), ou **Claude Code** lui-même : tes messages partent à `claude -p` dans le dossier que tu choisis, en
 continuant la même conversation, et ses hooks montrent ce qu'il fait. Dans ce cas, le mode `default` ne le laisse que
 lire (personne n'est là pour dire oui) ; `acceptEdits` le laisse modifier des fichiers sans demander. **Oublier nos
@@ -298,7 +299,7 @@ de l'horloge.
 
 ### Démarrage rapide (macOS, Apple Silicon)
 
-1. Télécharge **`Capri-1.0.0-arm64.dmg`** dans la [dernière release de ce fork](https://github.com/LyraCS/capri-desktop/releases/latest),
+1. Télécharge **Capri** (le `.dmg`, Apple Silicon) dans la [dernière release de ce fork](https://github.com/LyraCS/capri-desktop/releases/latest),
    ouvre-le, et glisse **Capri** dans **Applications**.
 2. Le build est signé ad hoc, pas notarié : macOS bloque le premier lancement. Clic droit sur **Capri** dans
    Applications › **Ouvrir** › **Ouvrir**. S'il refuse encore : Réglages Système › Confidentialité et sécurité ›

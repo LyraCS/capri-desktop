@@ -425,12 +425,7 @@ function rebuildTray() {
           label: p.label, type: 'radio', checked: cfg.provider === provider, click: () => pickProvider(provider),
         })),
         { type: 'separator' },
-        ...(chatModels?.length
-          ? chatModels.map((name) => ({
-            label: cloud.free.includes(name) ? `${name} · ${t.cloudFree}` : name,
-            type: 'radio', checked: name === pickModel(cfg), click: () => updateConfig({ chatModel: name }),
-          }))
-          : [{ label: (chatError || t.noOllama).slice(0, 80), enabled: false }]),
+        ...modelChoices(cfg, t),
         // Ollama's free cloud models when you're signed in to it, fetched on the click (it takes a second)
         ...(cfg.provider === 'ollama' && chatModels ? [
           ...cloud.free.filter((name) => !chatModels.includes(name)).map((name) => ({
@@ -560,6 +555,31 @@ function pickModel(cfg = config.load()) {
   if (!chatModels?.length) return null;
   if (chatModels.includes(cfg.chatModel)) return cfg.chatModel;
   return chatModels.find((m) => !ollama.isCloud(m)) || chatModels[0];
+}
+
+// The models to pick from, in her menu. A local model and a handful of online ones fit flat; a router
+// (9Router, OpenRouter) lists hundreds of "provider/model": one submenu per provider, or the menu would
+// scroll for a minute.
+function modelChoices(cfg, t) {
+  if (!chatModels?.length) return [{ label: (chatError || t.noOllama).slice(0, 80), enabled: false }];
+  const picked = pickModel(cfg);
+  const item = (name) => ({
+    label: cloud.free.includes(name) ? `${name} · ${t.cloudFree}` : name,
+    type: 'radio',
+    checked: name === picked,
+    click: () => updateConfig({ chatModel: name }),
+  });
+  const groups = new Map();
+  for (const name of chatModels) {
+    const cut = name.indexOf('/');
+    const group = cut > 0 ? name.slice(0, cut) : '';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(name);
+  }
+  const loose = groups.get('') || [];
+  const nested = [...groups].filter(([group]) => group);
+  if (chatModels.length <= 24 || nested.length < 2) return chatModels.map(item);
+  return [...loose.map(item), ...nested.map(([group, names]) => ({ label: group, submenu: names.map(item) }))];
 }
 
 async function refreshModels() {
@@ -869,7 +889,19 @@ function registerIpc() {
     if (url) patch.customUrl = String(url).trim();
     updateConfig(patch);
     const models = await refreshModels();
-    if (models?.length) return { ok: true, model: pickModel() };
+    if (models?.length) {
+      // a router's list is mostly models it may not answer with (9Router, OpenRouter): find one that does
+      if (provider !== 'router9') return { ok: true, model: pickModel() };
+      const working = await llm.firstWorking(provider, llmConfig(), models);
+      if (working) {
+        if (working !== config.load().chatModel) updateConfig({ chatModel: working });
+        return { ok: true, model: working };
+      }
+      // its key worked (it listed its models) but nothing answers yet: keep the key, go back to what she had
+      updateConfig({ provider: before.provider });
+      await refreshModels();
+      return { ok: false, error: "no model answered (connect a provider in 9Router's dashboard)" };
+    }
     const error = models ? 'no model' : chatError || 'offline';
     updateConfig({ provider: before.provider, apiKeys: before.apiKeys, customUrl: before.customUrl });
     await refreshModels();
