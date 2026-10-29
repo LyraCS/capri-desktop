@@ -190,9 +190,10 @@ panel says so every time.
 - **A Roblox game by its name** ("start Steal a Brainrot on Roblox", "in my roblox play grow a garden"): she finds
   it on Roblox and drops you straight into it (or opens its page if Roblox isn't installed).
 - **Music**: "pause", "next", "louder", "mute"… press the media keys, so it works with Spotify and most players, right
-  as you send it. "Play Bohemian Rhapsody" or "put some Daft Punk on YouTube" opens the right video on YouTube,
-  straight away (not a search). "Play whatever you want": she picks. "Put Daft Punk on Spotify" opens Spotify on a
-  search for it.
+  as you send it. "Play Bohemian Rhapsody" opens the song where your music plays — **Apple Music** on a Mac, YouTube
+  elsewhere (the right video, not a search) — and "Play whatever you want" lets her pick. "Put Daft Punk on Spotify"
+  opens Spotify on a search for it, and "on Apple Music" or "on YouTube" picks that one for the song. Her menu ›
+  **Music plays in** changes the default.
 - **A website**: always behind a button showing where it goes.
 - **Close an app** ("close AM Music", "can you shut Discord down?"): a button with the app's name, and nothing happens
   until you click it. She closes it the way its own close button does, so it can still ask you to save. If it only

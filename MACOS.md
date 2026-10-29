@@ -136,6 +136,15 @@ The built-in providers (OpenRouter, OpenAI, Groq, Gemini, DeepSeek, Mistral) onl
 local options (Ollama, LM Studio, llama.cpp) still work if you'd rather keep it offline. Keys are encrypted
 with your login keychain and stored in the app's config folder.
 
+## Music
+
+Ask her to play something and she looks it up in **Apple Music**: Apple's own search (no key) finds the song and
+the Music app opens on its page, that track under the cursor — one click, or Space, starts it. A link can open a
+song in Apple Music, not start it, so she gets you to the song but can't press play for you.
+
+menu › **Music plays in** switches that to **Spotify** (a search in the app) or **YouTube** (the right video, in
+your browser). Saying "on Apple Music", "on Spotify" or "on YouTube" in your message overrides it for that song.
+
 ## What differs from the Windows build
 
 - Menu bar instead of the notification area; `⌘⌃C` instead of `Ctrl+Alt+C`; "the Dock" instead of "the taskbar".

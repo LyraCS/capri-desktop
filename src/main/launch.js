@@ -299,6 +299,26 @@ async function music(query) {
   return true;
 }
 
+// The song in Apple Music: Apple's own search (no key) finds it, and the Music app opens on its page,
+// that track under the cursor (music:// - one click, or Space, starts it: Apple lets a link open a song
+// but not play it). { title, artist } of what it found, or { title: null } for its search page.
+async function appleMusic(query) {
+  const q = String(query || '').trim().slice(0, 200);
+  if (!q) return null;
+  let hit = null;
+  try {
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1&media=music`, {
+      signal: AbortSignal.timeout(7000),
+    });
+    if (res.ok) hit = (await res.json())?.results?.[0] || null;
+  } catch {
+    // offline, or Apple's search is down: its search page still opens
+  }
+  const page = hit?.trackViewUrl?.replace(/^https:\/\/music\.apple\.com\//, 'music://music.apple.com/');
+  await shell.openExternal(page || `music://music.apple.com/us/search?term=${encodeURIComponent(q)}`);
+  return { title: hit?.trackName || null, artist: hit?.artistName || null };
+}
+
 // A song on YouTube, the exact video: the first result of a search (no key needed), opened in your
 // browser. { title } of what it found, or { title: null } when it could only open the search.
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
@@ -364,4 +384,4 @@ async function site(address) {
   return true;
 }
 
-module.exports = { launchables, match, find, launch, media, music, youtube, roblox, site, siteUrl, risky };
+module.exports = { launchables, match, find, launch, media, music, appleMusic, youtube, roblox, site, siteUrl, risky };

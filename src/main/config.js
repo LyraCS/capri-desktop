@@ -20,6 +20,7 @@ const DEFAULTS = {
   provider: 'ollama', // who answers her chat: a key of llm.js PROVIDERS
   apiKeys: {},       // { openai: 'sk-...' }, else the provider's env variable
   customUrl: '',     // the 'custom' provider: any OpenAI-compatible base URL (http://host:port/v1)
+  musicService: '',  // where a song you ask for plays: 'apple', 'spotify' or 'youtube' ('' = Apple Music on a Mac, YouTube elsewhere)
   claudeCwd: null,   // the folder Claude Code works in (null: your home folder)
   userName: '',      // what she calls you
   persona: '',       // how you want her, in your words (her chat)

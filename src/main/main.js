@@ -403,6 +403,16 @@ function rebuildTray() {
       ],
     },
     {
+      label: t.musicService,
+      submenu: [[t.musicApple, 'apple'], [t.musicSpotify, 'spotify'], [t.musicYoutube, 'youtube']].map(([label, service]) => ({
+        label,
+        type: 'radio',
+        // Apple Music on a Mac unless you said otherwise: it has the catalogue right there
+        checked: (cfg.musicService || (MAC ? 'apple' : 'youtube')) === service,
+        click: () => updateConfig({ musicService: service }),
+      })),
+    },
+    {
       label: t.screen,
       enabled: screens.length > 1,
       submenu: [
@@ -920,6 +930,7 @@ function registerIpc() {
     return item && { ...item, risky: launch.risky(item) }; // a program or a script: behind a button
   });
   ipcMain.handle('apps:youtube', (_e, query) => launch.youtube(query).catch(() => null));
+  ipcMain.handle('apps:appleMusic', (_e, query) => launch.appleMusic(query).catch(() => null));
   ipcMain.handle('apps:roblox', (_e, query) => launch.roblox(query).catch(() => null));
   // your files (files.js): a search, opening what it found, a screenshot, a search on the web
   ipcMain.handle('files:search', (_e, query) => files.search(query).catch(() => []));

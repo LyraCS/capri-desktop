@@ -47,6 +47,8 @@ const SPOTIFY_ASK = /(?:play|put on|put|mets|joue|lance|écoute|pon|toca|reprodu
 const MEDIA_ACTIONS = new Set(MEDIA_ASK.map(([action]) => action));
 // "mets Bohemian Rhapsody sur YouTube", "play Daft Punk on youtube"
 const YOUTUBE_ASK = /(?:play|put on|put|mets|met|joue|lance|écoute|pon|toca|reproduce|coloca|bota|toque|включи|поставь)(?:[- ]moi|[- ]me|me)?\s+(.+?)\s+(?:on|sur|en|no|na|в)\s+youtube/i;
+// "mets Bohemian Rhapsody sur Apple Music", "pon Daft Punk en Apple Music"
+const APPLE_ASK = /(?:play|put on|put|mets|met|joue|lance|écoute|pon|toca|reproduce|coloca|bota|toque|включи|поставь)(?:[- ]moi|[- ]me|me)?\s+(.+?)\s+(?:on|sur|en|no|na|в)\s+apple\s*music/i;
 // "mets Bohemian Rhapsody", "joue-moi du Daft Punk", "play some Queen": a song, or a game to play
 const PLAY_ASK = /^(?:capri,?\s+)?(?:mets|met|joue|play|put on|pon|toca|coloca|bota|toque|включи|поставь)(?:[- ]moi|[- ]me|me)?\s+(.{2,100})$/iu;
 // "joue à Brawlhalla", "play the game…": a game, not a song
@@ -426,6 +428,8 @@ export class Chat {
     if (song) return { kind: 'music', song };
     const video = YOUTUBE_ASK.exec(text)?.[1];
     if (video) return { kind: 'youtube', song: songOf(video) };
+    const appleSong = APPLE_ASK.exec(text)?.[1];
+    if (appleSong) return { kind: 'apple', song: songOf(appleSong) };
     const app = this.askedToClose(text);
     if (app) return { kind: 'close', name: app };
     if (GAME_ASK.test(text) && count <= 8) return { kind: 'open', text };
@@ -474,6 +478,7 @@ export class Chat {
       return (await this.host.music(asked.song)) ? { line: fmt(t.music, { song: asked.song }), face: 'laugh' } : null;
     }
     if (asked.kind === 'youtube') return this.youtube(asked.song);
+    if (asked.kind === 'apple') return this.appleMusic(asked.song);
     if (asked.kind === 'roblox') {
       this.zap();
       const res = await this.host.roblox(asked.game);
@@ -513,7 +518,7 @@ export class Chat {
         ? await this.doNow({ kind: 'open', text: asked.before }) : null;
       // "joue à Brawlhalla" is a game, "lance spotify" an app; anything else, a song
       const game = await this.host.findLaunch(asked.song);
-      const then = game && ['steam', 'epic', 'app', 'file'].includes(game.kind) && !game.risky ? await this.openNow(game) : await this.youtube(asked.song);
+      const then = game && ['steam', 'epic', 'app', 'file'].includes(game.kind) && !game.risky ? await this.openNow(game) : await this.song(asked.song);
       if (!first?.line) return then;
       return { line: [first.line, then?.line].filter(Boolean).join('\n'), face: then?.face || first.face };
     }
@@ -547,6 +552,34 @@ export class Chat {
     const res = await this.host.youtube(song);
     if (!res) return null;
     return { line: res.title ? fmt(this.t.youtube, { title: res.title }) : fmt(this.t.youtubeSearch, { song }), face: 'laugh' };
+  }
+
+  // The song in Apple Music (its page in the Music app, that track under the cursor).
+  async appleMusic(song) {
+    this.zap();
+    const res = await this.host.appleMusic(song);
+    if (!res) return null;
+    return {
+      line: res.title ? fmt(this.t.appleMusic, { title: res.title, artist: res.artist }) : fmt(this.t.appleMusicSearch, { song }),
+      face: 'laugh',
+    };
+  }
+
+  // A search in Spotify, the app if it's there.
+  async spotify(song) {
+    this.zap();
+    const ok = await this.host.music(song);
+    if (!ok) return null;
+    return { line: fmt(this.t.music, { song }), face: 'laugh' };
+  }
+
+  // Where a song she picked goes: her menu decides (Apple Music on a Mac by default), YouTube elsewhere.
+  async song(query) {
+    const cfg = await this.host.getConfig();
+    const where = cfg.musicService || (cfg.mac ? 'apple' : 'youtube');
+    if (where === 'apple') return this.appleMusic(query);
+    if (where === 'spotify') return this.spotify(query);
+    return this.youtube(query);
   }
 
   // Once she has answered: her line about what she did, else the app you asked to close, else what
@@ -591,8 +624,11 @@ export class Chat {
     const value = tag[2].trim();
     if (!value || !wanted(kind, text)) return undefined;
     if (kind === 'media') return MEDIA_ACTIONS.has(value.toLowerCase()) ? this.media(value.toLowerCase(), answer) : undefined;
-    // a song she picked: on YouTube, the right video (on Spotify if that's what you said)
-    if (kind === 'music') return /spotify/i.test(text) ? this.music(value, answer) : this.playOn(value, answer);
+    // a song she picked: where music plays for you, or the service your message named
+    if (kind === 'music') {
+      const where = /spotify/i.test(text) ? 'spotify' : /apple\s*music/i.test(text) ? 'apple' : /youtube/i.test(text) ? 'youtube' : null;
+      return this.playOn(value, answer, where);
+    }
     if (kind === 'site') return this.offerSite(value, answer);
     const item = await this.host.findLaunch(value);
     if (item) return this.launch(item, answer);
@@ -630,8 +666,11 @@ export class Chat {
     this.addLine(answer, res.ok ? fmt(t.opened, { app: this.nameOf(item) }) : `${t.failed} ${res.error}`, res.ok ? 'laugh' : 'aside');
   }
 
-  async playOn(song, answer) {
-    const done = await this.youtube(song);
+  async playOn(song, answer, where = null) {
+    const done = where === 'spotify' ? await this.spotify(song)
+      : where === 'youtube' ? await this.youtube(song)
+      : where === 'apple' ? await this.appleMusic(song)
+      : await this.song(song);
     if (done) this.addLine(answer, done.line, done.face);
   }
 
@@ -640,13 +679,6 @@ export class Chat {
     this.capri.pulse();
     const ok = await this.host.media(action);
     if (ok) this.addLine(answer, this.t.media[action], 'smug');
-  }
-
-  // A Spotify search, in the app if it's there.
-  async music(song, answer) {
-    this.zap();
-    const ok = await this.host.music(song);
-    if (ok) this.addLine(answer, fmt(this.t.music, { song }), 'laugh');
   }
 
   // A website: always behind a button that shows where it goes.
@@ -726,7 +758,7 @@ export class Chat {
   // What she can do on the PC when you ask (Windows), and nothing else.
   powers() {
     const lines = [
-      'Only when the user asks you to open an app, a game, a file or folder on their desktop, or a folder like Downloads, to play music, to control the music playing, or to open a website: say in a few words that you will, and end your answer with one tag: [[open: NAME]], [[music: ARTIST - SONG]] (it plays on YouTube; if they did not say which song, pick one that fits), [[media: ACTION]] (ACTION: pause, play, next, previous, volup, voldown or mute), or [[site: ADDRESS]]. Some of these get a button to confirm, so never say it is already done. Any other time, write no tag at all: there are no other tags.',
+      'Only when the user asks you to open an app, a game, a file or folder on their desktop, or a folder like Downloads, to play music, to control the music playing, or to open a website: say in a few words that you will, and end your answer with one tag: [[open: NAME]], [[music: ARTIST - SONG]] (it plays where their music plays; if they did not say which song, pick one that fits), [[media: ACTION]] (ACTION: pause, play, next, previous, volup, voldown or mute), or [[site: ADDRESS]]. Some of these get a button to confirm, so never say it is already done. Any other time, write no tag at all: there are no other tags.',
     ];
     if (this.apps.length) {
       const open = this.apps.map(({ name, label }) => (label && label !== name ? `${name} (${label})` : name)).join(', ');
