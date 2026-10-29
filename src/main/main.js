@@ -9,6 +9,7 @@ const {
   clipboard, ClipboardItem, dialog, powerMonitor, desktopCapturer,
 } = require('electron');
 const { randomUUID } = require('node:crypto');
+const { execFile } = require('node:child_process');
 
 const config = require('./config');
 const { TRAY, LANGS } = require('./labels');
@@ -20,6 +21,7 @@ const setup = require('./setup');
 const apps = require('./apps');
 const launch = require('./launch');
 const files = require('./files');
+const music = require('./music');
 const { ASSISTANTS, assistant } = require('./assistants');
 const activeAssistant = () => assistant(config.load().assistant); // Claude Code or Codex
 const activeHooks = () => activeAssistant().hooks;
@@ -44,6 +46,9 @@ let tray = null;
 let trayMenu = null; // also what she opens when you right-click her
 let demoTimer = null;
 let windowWatch = null;
+let box = null;        // her mini-box: a small always-on-top window with her in it
+let boxSaveTimer = null;
+let wifiTimer = null;
 // the watcher only speaks when something changes: the overlay asks for this when it (re)loads
 let lastWindows = null;
 let chatModels = null; // the provider's models, as last seen (null: not reached)
@@ -233,6 +238,178 @@ function sendCommand(name, payload = {}) {
   overlay?.webContents.send('capri:command', { name, ...payload });
 }
 
+// ---------- her mini-box -------------------------------------------------------
+// A little always-on-top window with her in it, for the corner of a screen or a stream: she lives
+// in it (the overlay's own sprite hides), it drags anywhere, and it remembers where you put it.
+
+const BOX_SIZES = {
+  small: { width: 240, height: 240 },
+  medium: { width: 300, height: 300 },
+  large: { width: 360, height: 360 },
+};
+
+const boxSize = () => BOX_SIZES[config.load().box?.size] || BOX_SIZES.medium;
+const boxed = () => Boolean(config.load().box?.on);
+
+// where it sits the first time: bottom right of the screen she's on, clear of the Dock
+function boxStart() {
+  const { workArea } = targetDisplay();
+  const { width, height } = boxSize();
+  return {
+    x: Math.round(workArea.x + workArea.width - width - 24),
+    y: Math.round(workArea.y + workArea.height - height - 24),
+  };
+}
+
+// Her panel is drawn by the overlay, next to the box while she's in it: the box's bottom middle,
+// in the overlay's own coordinates.
+function boxAnchor() {
+  if (!box || box.isDestroyed() || !overlay) return null;
+  const b = box.getBounds();
+  const o = overlay.getBounds();
+  return { x: b.x - o.x + b.width / 2, y: b.y - o.y + b.height - 6 };
+}
+
+function sendBoxAnchor() {
+  const at = boxAnchor();
+  if (at) sendCommand('box', { on: true, ...at });
+}
+
+function sendToBox(channel, payload) {
+  if (box && !box.isDestroyed()) box.webContents.send(channel, payload);
+}
+
+function createBox() {
+  const cfg = config.load().box || {};
+  const { width, height } = boxSize();
+  const at = Number.isFinite(cfg.x) && Number.isFinite(cfg.y) ? { x: cfg.x, y: cfg.y } : boxStart();
+  box = new BrowserWindow({
+    ...at,
+    width,
+    height,
+    transparent: true,
+    backgroundColor: '#00000000',
+    frame: false,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  box.setAlwaysOnTop(true, 'floating');
+  box.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  box.loadFile(path.join(ROOT, 'src', 'renderer', 'box.html'));
+  box.once('ready-to-show', () => box && !box.isDestroyed() && box.showInactive());
+  box.on('moved', () => {
+    clearTimeout(boxSaveTimer);
+    boxSaveTimer = setTimeout(() => {
+      if (!box || box.isDestroyed()) return;
+      const { x, y } = box.getBounds();
+      config.save({ box: { ...config.load().box, x, y } });
+      sendBoxAnchor();
+    }, 350);
+  });
+  box.on('closed', () => { box = null; });
+  box.webContents.on('did-finish-load', () => {
+    sendBoxAnchor();
+    sendToBox('music:update', music.get());
+    sendToBox('box:mode', lastMode);
+    sendToBox('box:hello', { lang: resolveLang(config.load().lang) });
+  });
+}
+
+// Show it or hide it ({ on } for a forced state). The overlay hides its own sprite while it's up.
+// The windows she steps out of her facecam for: the ones you're working in (OpenCode, Claude Code,
+// your editor). Anywhere else, she's in it, like a streamer's webcam - not a cage.
+const WORK_APPS = /^(terminal|iterm2?|warp|kitty|alacritty|wezterm|hyper|ghostty|tabby|opencode|code|visual studio code|cursor|windsurf|zed|sublime text|xcode|nova)$/i;
+
+let facecamUp = false;
+let lastMode = 'idle';
+
+function setFacecam(show) {
+  if (show === facecamUp) return;
+  facecamUp = show;
+  if (show) {
+    if (!box) createBox();
+    else box.showInactive();
+    sendBoxAnchor();
+  } else {
+    box?.hide();
+    sendCommand('box', { on: false });
+  }
+}
+
+function facecamFor(data) {
+  if (!boxed()) return;
+  const app = data?.front || data?.wins?.find((w) => w.id === data.fg)?.app || '';
+  setFacecam(!WORK_APPS.test(app));
+}
+
+function toggleBox(on = !boxed()) {
+  const cfg = config.load();
+  config.save({ box: { ...cfg.box, on } });
+  if (on) {
+    if (lastWindows) facecamFor(lastWindows);
+    else setFacecam(true);
+  } else {
+    setFacecam(false);
+  }
+  rebuildTray();
+}
+
+function resizeBox() {
+  if (!box || box.isDestroyed()) return;
+  const { width, height } = boxSize();
+  const b = box.getBounds();
+  // grow around the middle, and stay on the screen
+  const { workArea } = targetDisplay();
+  const x = clamp(Math.round(b.x + (b.width - width) / 2), workArea.x, workArea.x + workArea.width - width);
+  const y = clamp(Math.round(b.y + (b.height - height) / 2), workArea.y, workArea.y + workArea.height - height);
+  box.setBounds({ x, y, width, height });
+  sendBoxAnchor();
+}
+
+const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
+
+// A box dragged onto another screen, or a screen changed under it: keep it where you can reach it.
+function fitBox() {
+  if (!box || box.isDestroyed()) return;
+  const { workArea } = displayAt(box.getBounds()); // the screen its middle is on
+  const b = box.getBounds();
+  const x = clamp(b.x, workArea.x, workArea.x + workArea.width - b.width);
+  const y = clamp(b.y, workArea.y, workArea.y + workArea.height - b.height);
+  if (x !== b.x || y !== b.y) box.setBounds({ ...b, x, y });
+  sendBoxAnchor();
+}
+
+// The Wi-Fi link she can feel: up or down, and a new address under her (another network). macOS hides
+// network names from apps that haven't asked for Location, so she doesn't say its name.
+let wifiAddr; // undefined: not looked yet; null: no Wi-Fi; an address: on it
+
+function probeWifi() {
+  execFile('scutil', ['--nwi'], { timeout: 4000 }, (err, out) => {
+    if (err) return; // no network information at all: nothing to say
+    const addr = /address\s*:\s*([0-9.]+)/.exec(String(out))?.[1] || null;
+    if (addr === wifiAddr) return;
+    const before = wifiAddr;
+    const first = before === undefined;
+    wifiAddr = addr;
+    if (first) return; // as it is when she starts: nothing to announce
+    overlay?.webContents.send('wifi:update', { up: Boolean(addr), new: Boolean(addr && before) });
+  });
+}
+
 // Ctrl+Alt+C: she folds herself away into her biochip in the corner, or comes back out of it.
 function toggleVisible(force) {
   const visible = typeof force === 'boolean' ? force : !config.load().visible;
@@ -387,6 +564,24 @@ function rebuildTray() {
       submenu: [[t.small, 0.45], [t.medium, 0.6], [t.large, 0.8]].map(([label, scale]) => ({
         label, type: 'radio', checked: Math.abs(cfg.scale - scale) < 0.01, click: () => updateConfig({ scale }),
       })),
+    },
+    {
+      label: t.box,
+      submenu: [
+        { label: t.boxShow, type: 'checkbox', checked: boxed(), click: (item) => toggleBox(item.checked) },
+        { type: 'separator' },
+        ...Object.keys(BOX_SIZES).map((size) => ({
+          label: size === 'small' ? t.small : size === 'large' ? t.large : t.medium,
+          type: 'radio',
+          checked: (cfg.box?.size || 'medium') === size,
+          click: () => {
+            const now = config.load();
+            config.save({ box: { ...now.box, size } });
+            resizeBox();
+            rebuildTray();
+          },
+        })),
+      ],
     },
     {
       label: t.sound,
@@ -944,6 +1139,17 @@ function registerIpc() {
   ipcMain.handle('apps:launch', (_e, item) => launch.launch(item).then(() => ({ ok: true }), (err) => ({ ok: false, error: err.message })));
   ipcMain.handle('apps:media', (_e, action) => launch.media(action));
   ipcMain.handle('apps:music', (_e, query) => launch.music(query).catch(() => false));
+  // what's playing (music.js), and the playlists of hers she can start
+  ipcMain.handle('music:now', () => music.get());
+  ipcMain.handle('music:playlists', () => music.playlists());
+  ipcMain.handle('music:playlist', (_e, name) => music.playPlaylist(name));
+  // her mini-box: asking for her chat from it, or closing it
+  ipcMain.on('box:chat', () => sendCommand('chat'));
+  ipcMain.on('box:close', () => toggleBox(false));
+  ipcMain.on('capri:mode', (_e, mode) => {
+    lastMode = String(mode || 'idle');
+    sendToBox('box:mode', lastMode);
+  });
   ipcMain.handle('apps:site', (_e, address) => launch.site(address).catch(() => false));
   // typing to her: the overlay takes the keyboard while the chat is open, and gives it back after
   ipcMain.on('overlay:focus', (_e, on) => {
@@ -1133,6 +1339,7 @@ function main() {
         // a click on the taskbar brings it up over her: sitting on it, her legs would vanish behind it
         if (data.taskbar && !lastWindows?.taskbar && config.load().rest === 'taskbar') raiseOverlay();
         lastWindows = data;
+        facecamFor(data);
         overlay?.webContents.send('windows:update', data);
       },
     });
@@ -1159,9 +1366,20 @@ function main() {
     llm.restoreClaude(readMemory().claude);
     refreshModels(); // for her menu's model list
     setTimeout(() => launch.launchables().catch(() => {}), 20000); // what she can open, before you ask
+    // her facecam, if it was on: shown once the window watcher knows what you're in (or anyway, if it
+    // never answers), so it doesn't flash up in a terminal
+    if (boxed()) setTimeout(() => { if (boxed() && !box) (lastWindows ? facecamFor(lastWindows) : setFacecam(true)); }, 1500);
+    music.start((state) => {
+      overlay?.webContents.send('music:update', state);
+      sendToBox('music:update', state);
+    });
+    probeWifi(); // the Wi-Fi she can name
+    wifiTimer = setInterval(probeWifi, 20000);
+    wifiTimer.unref?.();
     // a screen plugged in, unplugged, or rearranged: her window fitted again, and she learns of it
     const screensChanged = () => {
       fitOverlay();
+      fitBox();
       windowWatch?.restart?.(); // its work area (the Dock's size) is cached: start it over
       rebuildTray();
       sendCommand('screens');
@@ -1172,11 +1390,26 @@ function main() {
     // after sleep or a locked screen, once Windows has settled
     powerMonitor.on('resume', () => setTimeout(rearmOverlay, 2000));
     powerMonitor.on('unlock-screen', () => setTimeout(rearmOverlay, 1000));
+    // the screen going away and coming back: she sleeps, then stretches when you're there again
+    let lastWake = 0;
+    const wakeHer = () => {
+      if (Date.now() - lastWake < 6000) return; // locked and resumed both fire
+      lastWake = Date.now();
+      sendCommand('wake', { back: true });
+      sendToBox('box:wake');
+    };
+    powerMonitor.on('lock-screen', () => { sendCommand('sleep'); sendToBox('box:sleep'); });
+    powerMonitor.on('suspend', () => sendCommand('sleep'));
+    powerMonitor.on('unlock-screen', wakeHer);
+    powerMonitor.on('resume', wakeHer);
   });
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     windowWatch?.stop();
+    music.stop();
+    clearInterval(wifiTimer);
+    clearTimeout(boxSaveTimer);
   });
   app.on('window-all-closed', (e) => e.preventDefault());
 }

@@ -58,6 +58,13 @@ export class Pc {
     return this.enabled && this.capri.mode !== 'alert' && !this.chat.open && !this.guide.running;
   }
 
+  // the Wi-Fi link: gone, back, or another network under her (main.js watches it)
+  onWifi({ up, new: fresh } = {}) {
+    if (!this.enabled) return;
+    if (!up) return this.say(pick(this.t.wifiOff), 'aside', 3500);
+    this.say(pick(fresh ? this.t.wifi : this.t.wifiBack), 'smug', 4000);
+  }
+
   say(line, face = 'smug', hold = 4500) {
     if (this.quiet) this.panel.say({ kind: 'info', face, line, hold });
   }

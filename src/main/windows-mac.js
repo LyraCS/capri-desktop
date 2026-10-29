@@ -41,7 +41,7 @@ function startWindowWatch({ overlay, onUpdate }) {
     if (!last || overlay.isDestroyed()) return;
     const bounds = overlay.getBounds();
     const wins = last.wins
-      .map((w) => ({ id: w.id, x: w.x - bounds.x, y: w.y - bounds.y, w: w.w, h: w.h, max: Boolean(w.max) }))
+      .map((w) => ({ id: w.id, app: w.app, x: w.x - bounds.x, y: w.y - bounds.y, w: w.w, h: w.h, max: Boolean(w.max) }))
       // only what overlaps Capri's screen
       .filter((w) => w.x < bounds.width && w.x + w.w > 0 && w.y < bounds.height && w.y + w.h > 0);
     // the Dock, where it is on her screen (null when it's on another one). Its top is often right
@@ -51,7 +51,7 @@ function startWindowWatch({ overlay, onUpdate }) {
       && d.y - bounds.y <= bounds.height && d.y - bounds.y + d.h > 0
       ? { x: d.x - bounds.x, y: d.y - bounds.y, w: d.w, h: d.h } : null;
     onUpdate({
-      fg: last.fg, taskbar: Boolean(last.taskbar), ai: Array.isArray(last.ai) ? last.ai : [],
+      fg: last.fg, front: String(last.front || ''), taskbar: Boolean(last.taskbar), ai: Array.isArray(last.ai) ? last.ai : [],
       game: last.game || null, usb: Array.isArray(last.usb) ? last.usb : [], plug: last.plug || null, wins, dock,
     });
   };

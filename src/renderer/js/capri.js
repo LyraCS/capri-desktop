@@ -83,6 +83,7 @@ export class Capri {
     };
     this.bob = 0;
     this.tilt = 0;
+    this.music = { playing: false, bpm: 112 }; // what's playing: she bobs to it, and stops when it does
     this.sx = 1;
     this.sy = 1;
     this.base = new Player('stand');
@@ -519,6 +520,13 @@ export class Capri {
     this.tilt = spun ? this.spin + pose.tilt : pose.tilt;
     this.sx = pose.sx;
     this.sy = pose.sy;
+    // music: a bob on the beat and a slow lean, so she moves to it; nothing when it's paused
+    if (this.music?.playing && !spun && !this.dragging && (this.stance === 'stand' || this.stance === 'sit')) {
+      const beat = (Math.PI * 2 * this.music.bpm) / 60;
+      const t = (now / 1000) * beat;
+      this.bob += Math.sin(t) * (this.stance === 'sit' ? 1.2 : 2.4);
+      this.tilt += Math.cos(t * 0.5) * 1.5;
+    }
     if (this.debug) Object.assign(p, this.debug); // --dev pose overrides
     if (cue) this.onCue(cue);
   }

@@ -193,7 +193,11 @@ panel says so every time.
   as you send it. "Play Bohemian Rhapsody" plays the song where your music plays — **Apple Music** on a Mac
   (it starts it for real), YouTube elsewhere (the right video, not a search) — and "Play whatever you want" lets
   her pick. "Put Daft Punk on Spotify" opens Spotify on a search for it, and "on Apple Music" or "on YouTube"
-  picks that one for the song. Her menu › **Music plays in** changes the default.
+  picks that one for the song. **"What's this song?"** answers with the cover under her line, and **"play my 7-80s
+  playlist"** starts one of yours. Her menu › **Music plays in** changes the default, and she moves to the beat of it.
+- **A facecam, on a Mac**: her menu › **Mini-box › Show it** puts her face in a square, always-on-top tile you can drag
+  anywhere — a streamer's webcam, not a cage. It's there while you're anywhere else and steps out when you're in a
+  terminal or an editor, where she'd rather be on your window.
 - **A website**: always behind a button showing where it goes.
 - **Close an app** ("close AM Music", "can you shut Discord down?"): a button with the app's name, and nothing happens
   until you click it. She closes it the way its own close button does, so it can still ask you to save. If it only

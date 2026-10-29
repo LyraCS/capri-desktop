@@ -99,6 +99,10 @@ Everything she senses about the machine is native, and nothing needs a permissio
 - **Games** — the program of the window in front is matched against Steam's and Epic's libraries, GOG's
   bundles (its `goggame-*.info` file) and Riot's own `.app`s. She says something and steps aside while you
   play, then comes back to ask if you won.
+- **The Wi-Fi** — `scutil --nwi` every 20 s: the link going, coming back, or another address under her (another
+  network). macOS hides network names from apps that haven't asked for Location, so she doesn't say its name.
+- **The screen going** — `powerMonitor`'s lock/suspend and unlock/resume: she curls up when it locks and
+  stretches back when you're there, with a line.
 
 `capri-windows --devices`, `--disk <id>` and `--game <path>` print what the helper makes of them.
 
@@ -135,6 +139,18 @@ menu › **AI model › Custom (customUrl in config)**, then **API key or addres
 The built-in providers (OpenRouter, OpenAI, Groq, Gemini, DeepSeek, Mistral) only need their key, and the
 local options (Ollama, LM Studio, llama.cpp) still work if you'd rather keep it offline. Keys are encrypted
 with your login keychain and stored in the app's config folder.
+
+## Her facecam
+
+menu › **Mini-box › Show it** puts her face in a square, always-on-top window you can drag anywhere: her own
+face, the way her panel draws it, with her name and a **LIVE** badge, a **TALK** button that opens her chat, and
+the song playing at the bottom with its cover. She moves on the beat and stands dead still when the music
+stops.
+
+It isn't a cage: while it's on, she's in the tile when you're anywhere else, and steps out of it (back onto
+your desktop, where she perches and does her thing) as soon as the app in front is a **terminal** or an
+**editor** — Terminal, iTerm, Warp, kitty, VS Code, Cursor, Zed, Xcode and the like. **Small / Medium / Large**
+sets its size, and it remembers where you left it.
 
 ## Music
 

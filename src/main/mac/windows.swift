@@ -316,6 +316,7 @@ func snapshot(selfPid: pid_t) -> String {
   var wins = ""
   var count = 0
   var frontID = 0
+  var frontApp = ""
   var aiKeys: Set<String> = []
   var game: String? = nil
 
@@ -335,6 +336,7 @@ func snapshot(selfPid: pid_t) -> String {
     if owner == "window server" || owner == "dock" || owner == "control center" { continue }
     let id = (info[kCGWindowNumber as String] as? NSNumber)?.intValue ?? 0
     let title = (info[kCGWindowName as String] as? String ?? "").lowercased()
+    if frontApp.isEmpty && layer == 0 && pid != selfPid { frontApp = owner }
 
     // the front window: her jealousy (by the app's name, always; the window title needs Screen
     // Recording), which game it is, and where she'd sit
@@ -356,17 +358,19 @@ func snapshot(selfPid: pid_t) -> String {
 
     if count > 0 { wins += "," }
     count += 1
-    wins += "{\"id\":\(id),\"x\":\(Int(rect.origin.x)),\"y\":\(Int(rect.origin.y)),\"w\":\(Int(rect.width)),\"h\":\(Int(rect.height)),\"max\":\(zoomed ? "true" : "false")}"
+    wins += "{\"id\":\(id),\"app\":\(json(owner)),\"x\":\(Int(rect.origin.x)),\"y\":\(Int(rect.origin.y)),\"w\":\(Int(rect.width)),\"h\":\(Int(rect.height)),\"max\":\(zoomed ? "true" : "false")}"
     if count >= 40 { break }
   }
 
   // the Dock is never "in front" the way the taskbar can be: no windows at all means the floor
   let keys = aiKeys.sorted().map { json($0) }.joined(separator: ",")
+  // the app you're in: its ordinary window (layer 0). Her own overlay and facecam are floating
+  // (layer 3, or 1000 for the overlay), so they never stand in for it.
   plugLock.lock()
   let plug = plugJSON
   plugLock.unlock()
 
-  return "{\"fg\":\(frontID),\"taskbar\":false,\"ai\":[\(keys)],\"game\":\(game.map { json($0) } ?? "null"),\"usb\":\(usbSticks()),\"plug\":\(plug),\"dock\":\(dockRect() ?? "null"),\"wins\":[\(wins)]}"
+  return "{\"fg\":\(frontID),\"front\":\(json(frontApp)),\"taskbar\":false,\"ai\":[\(keys)],\"game\":\(game.map { json($0) } ?? "null"),\"usb\":\(usbSticks()),\"plug\":\(plug),\"dock\":\(dockRect() ?? "null"),\"wins\":[\(wins)]}"
 }
 
 // AppKit screens are bottom-left; Quartz (and the overlay) are top-left of the main display.

@@ -207,7 +207,10 @@ async function boot() {
       mask.hide();
     }
   };
-  capri.onMode = (mode, prev) => chip.setMode(mode, prev);
+  capri.onMode = (mode, prev) => {
+    chip.setMode(mode, prev);
+    host.reportMode(mode); // her facecam wears the face that goes with it
+  };
   // now and then she says something about the satellite: while she looks at it, or once
   // the red light has gone up (never during, nothing should cover that)
   capri.onGaze = (when) => {
@@ -511,6 +514,17 @@ async function boot() {
     jealousy.onWindows(data);
     pc.onWindows(data);
   });
+  // what's playing: she moves to it (a bob on the beat), and stops dead when it's paused
+  const bpmOf = (state) => {
+    let n = 0;
+    for (const c of `${state.title}${state.artist}`) n = (n * 31 + c.charCodeAt(0)) % 997;
+    return 96 + (n % 33); // 96 to 128
+  };
+  host.onMusic((state) => {
+    capri.music = { playing: Boolean(state?.playing), bpm: state?.title ? bpmOf(state) : 112 };
+  });
+  // the Wi-Fi link (main.js checks it now and then)
+  host.onWifi((state) => pc.onWifi(state));
   // the windows as they are now: the watcher only speaks again when something changes
   host.windowsNow().then((data) => data && capri.setWindows(data));
 
@@ -660,6 +674,25 @@ async function boot() {
         break;
       case 'goScreen': // a screen picked in her menu: she goes there
         goToScreen(cmd.id);
+        break;
+      case 'box': { // her mini-box is up: the overlay keeps her panel, box.js draws her
+        const on = Boolean(cmd.on);
+        document.documentElement.dataset.boxed = on ? 'on' : 'off';
+        capri.wander = on ? false : config.wander;
+        if (on && Number.isFinite(cmd.x) && Number.isFinite(cmd.y)) {
+          capri.pos = { x: cmd.x, y: cmd.y };
+          capri.place();
+        } else if (!on) {
+          capri.goHome();
+        }
+        break;
+      }
+      case 'sleep': // the screen locked, or the Mac went to sleep
+        capri.setMode('sleep');
+        break;
+      case 'wake': // and you're back
+        capri.wake();
+        if (cmd.back) pc.say(pick(pc.t.back), 'laugh', 4000);
         break;
       case 'screens': // a screen plugged in, unplugged or moved
         refreshScreens();

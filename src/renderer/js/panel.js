@@ -32,6 +32,10 @@ export class Panel {
     this.streamTo = [];
     this.portrait = panel.querySelector('.panel__face img');
     this.quote = panel.querySelector('.panel__quote');
+    this.art = panel.querySelector('.panel__art');
+    this.artImg = panel.querySelector('.panel__artimg');
+    this.artTitle = panel.querySelector('.panel__arttitle');
+    this.artArtist = panel.querySelector('.panel__artartist');
     this.progress = panel.querySelector('.panel__progress');
     this.bar = panel.querySelector('.panel__bar');
     this.reply = panel.querySelector('.panel__reply');
@@ -132,6 +136,7 @@ export class Panel {
     this.state.textContent = msg.badge || this.labels.state[msg.kind] || '';
     this.quote.textContent = msg.quote || '';
     this.quote.hidden = !msg.quote;
+    this.setArt(msg.art);
     this.setProgress(msg.progress);
     this.reply.textContent = msg.reply || '';
     this.reply.hidden = !msg.reply;
@@ -162,6 +167,18 @@ export class Panel {
   setProgress(k) {
     this.progress.hidden = typeof k !== 'number';
     if (!this.progress.hidden) this.bar.style.transform = `scaleX(${clamp(k, 0, 1).toFixed(3)})`;
+  }
+
+  // The cover of what's playing, under her line (a data URL from main: the renderer stays offline).
+  setArt(art) {
+    if (!this.art) return;
+    const show = Boolean(art?.url);
+    this.art.hidden = !show;
+    if (!show) return;
+    this.artImg.src = art.url;
+    this.artTitle.textContent = art.title || '';
+    this.artArtist.textContent = art.artist || '';
+    this.place();
   }
 
   // The quote under her line, changed in place (how far a download is), without a new message.

@@ -49,6 +49,11 @@ const MEDIA_ACTIONS = new Set(MEDIA_ASK.map(([action]) => action));
 const YOUTUBE_ASK = /(?:play|put on|put|mets|met|joue|lance|écoute|pon|toca|reproduce|coloca|bota|toque|включи|поставь)(?:[- ]moi|[- ]me|me)?\s+(.+?)\s+(?:on|sur|en|no|na|в)\s+youtube/i;
 // "mets Bohemian Rhapsody sur Apple Music", "pon Daft Punk en Apple Music"
 const APPLE_ASK = /(?:play|put on|put|mets|met|joue|lance|écoute|pon|toca|reproduce|coloca|bota|toque|включи|поставь)(?:[- ]moi|[- ]me|me)?\s+(.+?)\s+(?:on|sur|en|no|na|в)\s+apple\s*music/i;
+// "what's this song?", "what's playing?", "qu'est-ce qui joue ?"
+const NOW_ASK = /\bwhat(?:'s| is)\s+(?:this|that)\s+(?:song|track|tune|playing)\b|\bwhat(?:'s| is)\s+playing\b|\bwhat song (?:is (?:this|that|playing)|is it)\b|qu['’]est[- ]ce qui (?:joue|passe)\b|quelle (?:chanson|musique)\b|c['’]est quoi (?:cette chanson|la musique)\b|qu[ée] (?:canci[óo]n|m[úu]sica) (?:es|suena|est[áa] sonando)\b|o que (?:est[áa] tocando|toca)\b|что (?:играет|это за песня)\b/i;
+// "play my <name> playlist", "joue ma playlist <name>", "play <name> playlist"
+const PLAYLIST_AFTER = /(?:play|put on|joue|lance|mets|pon|toca|reproduce|coloca|включи|поставь)\s+(?:my\s+|ma\s+|la\s+|mi\s+|minha\s+|мою\s+)?(?:playlist|liste de lecture|lista de reproducci[óo]n|плейлист)\s+(.{2,60})/i;
+const PLAYLIST_BEFORE = /(?:play|put on|joue|lance|mets|pon|toca|reproduce|coloca|включи|поставь)\s+(?:my\s+|ma\s+|la\s+|mi\s+|minha\s+|мою\s+)?(.{2,60}?)\s+(?:playlist|liste de lecture|lista de reproducci[óo]n|плейлист)\b/i;
 // "mets Bohemian Rhapsody", "joue-moi du Daft Punk", "play some Queen": a song, or a game to play
 const PLAY_ASK = /^(?:capri,?\s+)?(?:mets|met|joue|play|put on|pon|toca|coloca|bota|toque|включи|поставь)(?:[- ]moi|[- ]me|me)?\s+(.{2,100})$/iu;
 // "joue à Brawlhalla", "play the game…": a game, not a song
@@ -422,6 +427,10 @@ export class Chat {
       const then = THEN_FOLDER.test(text) ? 'folder' : THEN_OPEN.test(text) ? 'open' : null;
       if (query || exts.length) return { kind: 'files', query, exts, then };
     }
+    // what's playing, and the playlists of hers she can start
+    if (NOW_ASK.test(text)) return { kind: 'now' };
+    const listed = PLAYLIST_AFTER.exec(text)?.[1] || PLAYLIST_BEFORE.exec(text)?.[1];
+    if (listed) return { kind: 'playlist', name: listed.trim().replace(/[.!?]+$/, '') };
     const media = MEDIA_ASK.find(([, re]) => re.test(text))?.[0];
     if (media && (count <= 5 || MUSIC_WORD.test(text))) return { kind: 'media', action: media };
     const song = SPOTIFY_ASK.exec(text)?.[1];
@@ -472,6 +481,22 @@ export class Chat {
     if (asked.kind === 'media') {
       this.capri.pulse();
       return (await this.host.media(asked.action)) ? { line: t.media[asked.action], face: 'smug' } : null;
+    }
+    if (asked.kind === 'now') {
+      const state = await this.host.musicNow();
+      if (!state?.title) return { line: this.t.noMusic, face: 'aside' };
+      const app = state.app === 'Music' ? 'Apple Music' : state.app || '';
+      return {
+        line: fmt(this.t.nowPlaying, { title: state.title, artist: state.artist || '…', app }),
+        art: { url: state.art, title: state.title, artist: state.artist },
+        face: 'smug',
+      };
+    }
+    if (asked.kind === 'playlist') {
+      this.zap();
+      const name = await this.host.playPlaylist(asked.name);
+      if (!name) return { line: fmt(this.t.noPlaylist, { name: asked.name }), face: 'aside' };
+      return { line: fmt(this.t.playlist, { name }), face: 'laugh' };
     }
     if (asked.kind === 'music') {
       this.zap();
@@ -612,7 +637,7 @@ export class Chat {
       });
       return undefined;
     }
-    if (done) return this.addLine(answer, done.line, done.face);
+    if (done) return this.addLine(answer, done.line, done.face, done.art);
     if (asked?.kind === 'remind') return undefined; // no time said: her answer asks when
     if (asked?.kind === 'close') return this.offerClose(asked.name, answer);
     if (asked && asked.kind !== 'open') return undefined; // music that didn't work out: nothing more to offer
@@ -637,9 +662,10 @@ export class Chat {
   }
 
   // her answer, with a line of what she did under it
-  addLine(answer, line, face = null) {
+  addLine(answer, line, face = null, art = null) {
     if (!this.open || this.turn) return;
     this.panel.stream(answer === '…' ? line : `${answer}\n${line}`, { done: true }); // nothing but a tag: just the line
+    if (art) this.panel.setArt(art);
     if (face) this.panel.setFace(face);
   }
 
@@ -758,7 +784,7 @@ export class Chat {
   // What she can do on the PC when you ask (Windows), and nothing else.
   powers() {
     const lines = [
-      'Only when the user asks you to open an app, a game, a file or folder on their desktop, or a folder like Downloads, to play music, to control the music playing, or to open a website: say in a few words that you will, and end your answer with one tag: [[open: NAME]], [[music: ARTIST - SONG]] (it plays where their music plays; if they did not say which song, pick one that fits), [[media: ACTION]] (ACTION: pause, play, next, previous, volup, voldown or mute), or [[site: ADDRESS]]. Some of these get a button to confirm, so never say it is already done. Any other time, write no tag at all: there are no other tags.',
+      'Only when the user asks you to open an app, a game, a file or folder on their desktop, or a folder like Downloads, to play music, to control the music playing, or to open a website: say in a few words that you will, and end your answer with one tag: [[open: NAME]], [[music: ARTIST - SONG]] (it plays where their music plays; if they did not say which song, pick one that fits), [[media: ACTION]] (ACTION: pause, play, next, previous, volup, voldown or mute), or [[site: ADDRESS]]. Some of these get a button to confirm, so never say it is already done. Any other time, write no tag at all: there are no other tags. When they ask what song is playing, or to play one of their playlists, their Mac tells you and does it: answer in a few words, in character, and never say you cannot hear it or see it.',
     ];
     if (this.apps.length) {
       const open = this.apps.map(({ name, label }) => (label && label !== name ? `${name} (${label})` : name)).join(', ');

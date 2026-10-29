@@ -202,8 +202,12 @@ fan d'elle, et le panneau du chat le dit à chaque fois.
   ça marche avec Spotify et la plupart des lecteurs, dès que tu envoies. « Mets Bohemian Rhapsody » lance la chanson
   là où ta musique se joue — **Apple Music** sur un Mac (elle la démarre vraiment), YouTube ailleurs (le bon clip,
   pas une recherche) — et « Mets la musique que tu veux » la laisse choisir. « Mets Daft Punk sur Spotify » ouvre
-  Spotify sur une recherche, et « sur Apple Music » ou « sur YouTube » choisit ce service pour la chanson. Son menu ›
-  **La musique se lance dans** change le défaut.
+  Spotify sur une recherche, et « sur Apple Music » ou « sur YouTube » choisit ce service pour la chanson.
+  **« C'est quoi cette chanson ? »** répond avec la pochette sous sa ligne, et **« joue ma playlist 7-80s »** lance
+  une des tiennes. Son menu › **La musique se lance dans** change le défaut, et elle bouge au rythme.
+- **Une facecam, sur un Mac** : son menu › **Mini-box › L'afficher** met son visage dans une tuile carrée, toujours
+  au-dessus, que tu peux glisser n'importe où — une webcam de streamer, pas une cage. Elle est là quand tu es
+  ailleurs, et sort quand tu es dans un terminal ou un éditeur, où elle préfère être sur ta fenêtre.
 - **Un site** : toujours derrière un bouton qui montre où il mène.
 - **Fermer une appli** (« ferme AM Music », « tu peux couper Discord ? ») : un bouton au nom de l'appli, et rien ne se
   passe tant que tu ne cliques pas. Elle la ferme comme son propre bouton de fermeture, donc l'appli peut encore te

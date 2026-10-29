@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'">
+  <title>Capri</title>
+  <link rel="stylesheet" href="styles/box.css">
+</head>
+<body>
+  <div class="facecam" id="cam" data-playing="off" data-mode="idle">
+    <div class="facecam__stage">
+      <div class="facecam__beat" id="beat">
+        <img class="facecam__img" id="face" alt="">
+      </div>
+      <div class="facecam__vignette" aria-hidden="true"></div>
+      <div class="facecam__scan" aria-hidden="true"></div>
+    </div>
+
+    <header class="facecam__hud">
+      <span class="facecam__dot" aria-hidden="true"></span>
+      <span class="facecam__name">CAPRI</span>
+      <span class="facecam__live">LIVE</span>
+      <button class="facecam__btn" id="talk" type="button" title="Talk to her">TALK</button>
+      <button class="facecam__btn facecam__close" id="close" type="button" title="Close">✕</button>
+    </header>
+
+    <footer class="facecam__foot" id="foot" hidden>
+      <img class="facecam__art" id="art" alt="" hidden>
+      <div class="facecam__track">
+        <span class="facecam__title" id="title"></span>
+        <span class="facecam__artist" id="artist"></span>
+      </div>
+      <div class="facecam__bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    </footer>
+  </div>
+  <script type="module" src="js/box.js"></script>
+</body>
+</html>
