@@ -1,38 +1,50 @@
 // Her facecam: a square tile with her face in it, cut like the rest of her interface. It shows up when
 // you're not in a terminal or an editor (main.js decides), moves to the song, and stands still on pause.
-// Her faces are the sheet in assets/capri/sprites.png, cut one picture per cell by tools/cut-faces.swift;
-// she shuffles them the whole time she's in the tile, and keeps the ones that fit what she's doing.
+// Her faces are the sheets in assets/capri/ (sprites.png, and song vibes.png for when music plays), cut one
+// picture per cell by tools/cut-faces.swift; she shuffles them the whole time she's in the tile, and keeps
+// the ones that fit what she's doing.
 
 const host = window.host;
-const DIR = '../../assets/capri/faces/';
+const DIR = '../../assets/capri/';
 
 // row by row, as cut: f01 top left, f25 bottom right
 const FACES = {
-  grin: 'f01.png', //   big grin, all fangs
-  laugh: 'f02.png', //  eyes shut, laughing
-  star: 'f03.png', //   star eyes, sparkles
-  angry: 'f04.png', //  cross, the vein popping
-  huh: 'f05.png', //    a question mark over her
-  sleepy: 'f06.png', // Zzz
-  love: 'f07.png', //   heart eyes
-  shock: 'f08.png', //  the "!!"
-  sad: 'f09.png', //    a sweat drop
-  smug: 'f10.png', //   tongue out, smug
-  cry: 'f11.png', //    a waterfall of tears
-  bored: 'f12.png', //  a "..." bubble
-  dizzy: 'f13.png', //  spiral eyes
-  blush: 'f14.png', //  flustered
-  terror: 'f15.png', // huge white eyes
-  doze: 'f16.png', //   half shut
-  wink: 'f17.png', //   a wink and a star
-  glare: 'f18.png', //  eyes on you, not amused
-  fang: 'f19.png', //   the sharp grin
-  shy: 'f20.png', //    hiding her eyes
-  peek: 'f21.png', //   one eye, sideways
-  roar: 'f22.png', //   shouting
-  teary: 'f23.png', //  welling up
-  wow: 'f24.png', //    round eyes, a little o
-  blep: 'f25.png', //   tongue, again
+  grin: 'faces/f01.png', //   big grin, all fangs
+  laugh: 'faces/f02.png', //  eyes shut, laughing
+  star: 'faces/f03.png', //   star eyes, sparkles
+  angry: 'faces/f04.png', //  cross, the vein popping
+  huh: 'faces/f05.png', //    a question mark over her
+  sleepy: 'faces/f06.png', // Zzz
+  love: 'faces/f07.png', //   heart eyes
+  shock: 'faces/f08.png', //  the "!!"
+  sad: 'faces/f09.png', //    a sweat drop
+  smug: 'faces/f10.png', //   tongue out, smug
+  cry: 'faces/f11.png', //    a waterfall of tears
+  bored: 'faces/f12.png', //  a "..." bubble
+  dizzy: 'faces/f13.png', //  spiral eyes
+  blush: 'faces/f14.png', //  flustered
+  terror: 'faces/f15.png', // huge white eyes
+  doze: 'faces/f16.png', //   half shut
+  wink: 'faces/f17.png', //   a wink and a star
+  glare: 'faces/f18.png', //  eyes on you, not amused
+  fang: 'faces/f19.png', //   the sharp grin
+  shy: 'faces/f20.png', //    hiding her eyes
+  peek: 'faces/f21.png', //   one eye, sideways
+  roar: 'faces/f22.png', //   shouting
+  teary: 'faces/f23.png', //  welling up
+  wow: 'faces/f24.png', //    round eyes, a little o
+  blep: 'faces/f25.png', //   tongue, again
+  // song vibes (assets/capri/song vibes.png), her with headphones on
+  vibe1: 'vibes/v01.png', //   headphones, eyes shut, notes over her
+  vibe2: 'vibes/v02.png', //   grinning with the headphones on
+  vibe3: 'vibes/v03.png', //   humming, one hand up
+  vibe4: 'vibes/v04.png', //   drinking through a straw, headphones on
+  vibe5: 'vibes/v05.png', //   eyes gone round, a heart and a note
+  vibe6: 'vibes/v06.png', //   rocking out, lightning
+  vibe7: 'vibes/v07.png', //   horns up, tongue out
+  vibe8: 'vibes/v08.png', //   mane thrown back, eyes shut
+  vibe9: 'vibes/v09.png', //   headphones on, fangs out
+  vibe10: 'vibes/v10.png', //  mane flying, headphones on
 };
 
 // what she cycles through: idling, working, waiting on you, asleep, and while music plays
@@ -41,7 +53,7 @@ const MOODS = {
   work: ['glare', 'angry', 'dizzy', 'fang', 'smug', 'grin'],
   alert: ['shock', 'terror', 'wow', 'huh'],
   sleep: ['sleepy', 'doze', 'sad', 'teary'],
-  play: ['laugh', 'star', 'love', 'wink', 'blep', 'smug', 'grin'],
+  play: ['vibe1', 'vibe2', 'vibe3', 'vibe4', 'vibe5', 'vibe6', 'vibe7', 'vibe8', 'vibe9', 'vibe10'],
 };
 
 // the pieces cut out of assets/capri/glitch.png (tools/cut-glitch.swift), flashed over her face
@@ -108,7 +120,9 @@ function wear(name, { glitch = true } = {}) {
 }
 
 function faces() {
-  return playing && mode === 'idle' ? MOODS.play : MOODS[mode] || MOODS.idle;
+  if (mode === 'alert') return MOODS.alert; // she needs you: that wins over the music
+  if (playing) return MOODS.play;
+  return MOODS[mode] || MOODS.idle;
 }
 
 // A new face from the set that fits, never the same twice in a row; while she waits on you (alert)
@@ -135,7 +149,7 @@ function setMode(next) {
 function setPlaying(on) {
   if (playing === on) return;
   playing = on;
-  if (mode === 'idle') shuffle();
+  shuffle();
 }
 
 // her bob stays at a tempo of her own, 96 to 128

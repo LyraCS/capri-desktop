@@ -148,6 +148,9 @@ bottom with its cover. She moves on the beat and stands dead still when the musi
 in `assets/capri/sprites.png`, cut into 25 portraits by `tools/cut-faces.swift`; she shuffles through them with a
 glitch on every change — the ones that fit idling, working, waiting on you, asleep, or a song playing.
 
+When a song is playing, that sheet steps aside for the song-vibes one (`assets/capri/song vibes.png`, cut into
+`assets/capri/vibes/`): headphones on, notes over her, horns up, mane thrown back — ten of them, shuffled.
+
 Her tiles tear too: the glitch sheet in `assets/capri/glitch.png` is cut into its pieces (`tools/cut-glitch.swift`)
 and two to four of them flash over her face every second or so — more, and bigger, when she's waiting on you or a
 song is playing. It's all her own art, not a filter.

@@ -1,11 +1,12 @@
 // Cuts a sheet of her faces into one picture per face, for her facecam (box.html).
 //
 //     swiftc -O -target arm64-apple-macos13.0 -o /tmp/cut-faces tools/cut-faces.swift
-//     /tmp/cut-faces assets/capri/sprites.png assets/capri/faces
+//     /tmp/cut-faces assets/capri/sprites.png assets/capri/faces [prefix]
 //
 // The sheet is a grid of cells on black; the gutters and the outer border are found by looking for
 // rows and columns that are black all the way through, so a sheet with different spacing still works.
-// Files come out row by row: f01.png (top left), f02.png, and so on. No dependencies: the macOS SDK.
+// Files come out row by row: f01.png (top left), f02.png, and so on (prefix "v" gives v01.png);
+// no dependencies but the macOS SDK.
 
 import Foundation
 import CoreGraphics
@@ -13,9 +14,10 @@ import ImageIO
 import UniformTypeIdentifiers
 
 guard CommandLine.arguments.count >= 3 else {
-  print("usage: cut-faces <sheet.png> <out-dir>")
+  print("usage: cut-faces <sheet.png> <out-dir> [prefix]")
   exit(2)
 }
+let prefix = CommandLine.arguments.count > 3 ? CommandLine.arguments[3] : "f"
 
 let inURL = URL(fileURLWithPath: CommandLine.arguments[1])
 let outDir = URL(fileURLWithPath: CommandLine.arguments[2])
@@ -96,7 +98,7 @@ for (r, row) in rows.enumerated() {
     guard w > 40, h > 40 else { continue }
     guard let crop = img.cropping(to: CGRect(x: x, y: y, width: w, height: h)) else { continue }
     n += 1
-    let name = String(format: "f%02d.png", n)
+    let name = String(format: "%@%02d.png", prefix, n)
     let url = outDir.appendingPathComponent(name)
     guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else { continue }
     CGImageDestinationAddImage(dest, crop, nil)
