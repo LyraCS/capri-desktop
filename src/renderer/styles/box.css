@@ -267,6 +267,22 @@ body {
 .facecam__bars i:nth-child(3) { height: 55%; animation-delay: 260ms; }
 .facecam__bars i:nth-child(4) { height: 75%; animation-delay: 390ms; }
 
+/* the glitch pieces, flashed over her face now and then */
+.facecam__glitch {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.facecam__glitch img {
+  position: absolute;
+  opacity: 0;
+  filter: saturate(1.7) contrast(1.15) brightness(1.1);
+  will-change: opacity;
+}
+
 @keyframes breathe {
   0%, 100% { transform: scale(1.01); }
   50% { transform: scale(1.035); }

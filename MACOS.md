@@ -148,6 +148,10 @@ bottom with its cover. She moves on the beat and stands dead still when the musi
 in `assets/capri/sprites.png`, cut into 25 portraits by `tools/cut-faces.swift`; she shuffles through them with a
 glitch on every change — the ones that fit idling, working, waiting on you, asleep, or a song playing.
 
+Her tiles tear too: the glitch sheet in `assets/capri/glitch.png` is cut into its pieces (`tools/cut-glitch.swift`)
+and two to four of them flash over her face every second or so — more, and bigger, when she's waiting on you or a
+song is playing. It's all her own art, not a filter.
+
 It isn't a cage: while it's on, she's in the tile when you're anywhere else, and steps out of it (back onto
 your desktop, where she perches and does her thing) as soon as the app in front is a **terminal** or an
 **editor** — Terminal, iTerm, Warp, kitty, VS Code, Cursor, Zed, Xcode and the like. **Small / Medium / Large**

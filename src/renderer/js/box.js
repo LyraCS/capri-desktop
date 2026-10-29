@@ -44,8 +44,12 @@ const MOODS = {
   play: ['laugh', 'star', 'love', 'wink', 'blep', 'smug', 'grin'],
 };
 
+// the pieces cut out of assets/capri/glitch.png (tools/cut-glitch.swift), flashed over her face
+const GLITCH = Array.from({ length: 90 }, (_, i) => `../../assets/capri/glitch/g${String(i + 1).padStart(2, '0')}.png`);
+
 const cam = document.getElementById('cam');
 const face = document.getElementById('face');
+const glitchLayer = document.getElementById('glitch');
 const beat = document.getElementById('beat');
 const foot = document.getElementById('foot');
 const art = document.getElementById('art');
@@ -56,6 +60,40 @@ let mode = 'idle';
 let playing = false;
 let last = null;
 let shuffleTimer = null;
+let glitchTimer = null;
+
+// One short burst of interference: a piece from her glitch sheet, somewhere over her face.
+function flash(n = 1) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (let i = 0; i < n; i++) {
+    const img = new Image();
+    img.alt = '';
+    // the bigger pieces read best: most bursts take one of those
+    const big = Math.random() < 0.7;
+    img.src = GLITCH[Math.floor(Math.random() * (big ? 34 : GLITCH.length))];
+    const width = 38 + Math.random() * 66; // % of the tile: bands right across it
+    img.style.width = `${width}%`;
+    img.style.left = `${Math.random() * Math.max(0, 100 - width * 0.7)}%`;
+    img.style.top = `${Math.random() * 88}%`;
+    const life = 220 + Math.random() * 340;
+    img.style.opacity = `${(0.9 + Math.random() * 0.1).toFixed(2)}`;
+    glitchLayer.appendChild(img);
+    // hard on, hard off, like a torn frame: no fade to miss
+    setTimeout(() => img.remove(), life);
+  }
+}
+
+// More of it when she's tense (waiting on you) or a song is playing, less when it's quiet.
+function scheduleGlitch() {
+  clearTimeout(glitchTimer);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const busy = mode === 'alert' || playing;
+  const wait = busy ? 240 + Math.random() * 420 : 480 + Math.random() * 900;
+  glitchTimer = setTimeout(() => {
+    flash(2 + Math.floor(Math.random() * 3)); // two to four bands
+    scheduleGlitch();
+  }, wait);
+}
 
 // A new expression, hard-cut like her art: a glitch, then the new face.
 function wear(name, { glitch = true } = {}) {
@@ -66,6 +104,7 @@ function wear(name, { glitch = true } = {}) {
   face.classList.remove('is-glitch');
   void face.offsetWidth; // restart the animation
   face.classList.add('is-glitch');
+  flash(2); // and some of her glitch sheet with the cut
 }
 
 function faces() {
@@ -135,6 +174,8 @@ async function boot() {
   })));
 
   setMode('idle');
+  for (const src of GLITCH) { const warm = new Image(); warm.src = src; } // no blink on the first burst
+  scheduleGlitch();
 
   host.onMusic(paintMusic);
   host.musicNow().then(paintMusic).catch(() => {});

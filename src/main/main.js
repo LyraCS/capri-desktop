@@ -326,6 +326,7 @@ function createBox() {
   });
   box.on('closed', () => { box = null; });
   overlay?.webContents.on('did-finish-load', () => { if (facecamUp) sendBoxAnchor(); });
+  if (DEV) box.webContents.on('console-message', (_e, level, message) => console.log(`[facecam:${level}] ${message}`));
   box.webContents.on('did-finish-load', () => {
     sendBoxAnchor();
     sendToBox('music:update', music.get());
