@@ -143,9 +143,10 @@ with your login keychain and stored in the app's config folder.
 ## Her facecam
 
 menu › **Mini-box › Show it** puts her face in a square, always-on-top window you can drag anywhere: her own
-face, the way her panel draws it, with her name and a **LIVE** badge, a **TALK** button that opens her chat, and
-the song playing at the bottom with its cover. She moves on the beat and stands dead still when the music
-stops.
+face, with her name and a **LIVE** badge, a **TALK** button that opens her chat, and the song playing at the
+bottom with its cover. She moves on the beat and stands dead still when the music stops. Her faces are the sheet
+in `assets/capri/sprites.png`, cut into 25 portraits by `tools/cut-faces.swift`; she shuffles through them with a
+glitch on every change — the ones that fit idling, working, waiting on you, asleep, or a song playing.
 
 It isn't a cage: while it's on, she's in the tile when you're anywhere else, and steps out of it (back onto
 your desktop, where she perches and does her thing) as soon as the app in front is a **terminal** or an

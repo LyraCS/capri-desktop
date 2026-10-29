@@ -1,20 +1,48 @@
 // Her facecam: a square tile with her face in it, cut like the rest of her interface. It shows up when
 // you're not in a terminal or an editor (main.js decides), moves to the song, and stands still on pause.
+// Her faces are the sheet in assets/capri/sprites.png, cut one picture per cell by tools/cut-faces.swift;
+// she shuffles them the whole time she's in the tile, and keeps the ones that fit what she's doing.
 
 const host = window.host;
-const DIR = '../../assets/capri/';
+const DIR = '../../assets/capri/faces/';
+
+// row by row, as cut: f01 top left, f25 bottom right
 const FACES = {
-  grin: 'capri-face.png',
-  calm: 'face-calm.png',
-  aside: 'face-aside.png',
-  smug: 'face-smug.png',
-  wide: 'face-wide.png',
-  look: 'face-look.png',
-  laugh: 'face-laugh.png',
-  many: 'face-many.png',
+  grin: 'f01.png', //   big grin, all fangs
+  laugh: 'f02.png', //  eyes shut, laughing
+  star: 'f03.png', //   star eyes, sparkles
+  angry: 'f04.png', //  cross, the vein popping
+  huh: 'f05.png', //    a question mark over her
+  sleepy: 'f06.png', // Zzz
+  love: 'f07.png', //   heart eyes
+  shock: 'f08.png', //  the "!!"
+  sad: 'f09.png', //    a sweat drop
+  smug: 'f10.png', //   tongue out, smug
+  cry: 'f11.png', //    a waterfall of tears
+  bored: 'f12.png', //  a "..." bubble
+  dizzy: 'f13.png', //  spiral eyes
+  blush: 'f14.png', //  flustered
+  terror: 'f15.png', // huge white eyes
+  doze: 'f16.png', //   half shut
+  wink: 'f17.png', //   a wink and a star
+  glare: 'f18.png', //  eyes on you, not amused
+  fang: 'f19.png', //   the sharp grin
+  shy: 'f20.png', //    hiding her eyes
+  peek: 'f21.png', //   one eye, sideways
+  roar: 'f22.png', //   shouting
+  teary: 'f23.png', //  welling up
+  wow: 'f24.png', //    round eyes, a little o
+  blep: 'f25.png', //   tongue, again
 };
-const MODE_FACE = { idle: 'grin', work: 'look', alert: 'wide', sleep: 'aside' };
-const DRIFT = ['grin', 'smug', 'look', 'calm', 'grin', 'aside'];
+
+// what she cycles through: idling, working, waiting on you, asleep, and while music plays
+const MOODS = {
+  idle: ['grin', 'huh', 'love', 'smug', 'peek', 'blep', 'wink', 'blush', 'bored', 'star', 'shy', 'blep'],
+  work: ['glare', 'angry', 'dizzy', 'fang', 'smug', 'grin'],
+  alert: ['shock', 'terror', 'wow', 'huh'],
+  sleep: ['sleepy', 'doze', 'sad', 'teary'],
+  play: ['laugh', 'star', 'love', 'wink', 'blep', 'smug', 'grin'],
+};
 
 const cam = document.getElementById('cam');
 const face = document.getElementById('face');
@@ -25,8 +53,9 @@ const title = document.getElementById('title');
 const artist = document.getElementById('artist');
 
 let mode = 'idle';
-let driftTimer = null;
-let revertTimer = null;
+let playing = false;
+let last = null;
+let shuffleTimer = null;
 
 // A new expression, hard-cut like her art: a glitch, then the new face.
 function wear(name, { glitch = true } = {}) {
@@ -39,24 +68,35 @@ function wear(name, { glitch = true } = {}) {
   face.classList.add('is-glitch');
 }
 
-// While she's just there, her face drifts now and then: watching, the fang, eyes on you.
-function drift() {
-  clearTimeout(driftTimer);
-  if (mode !== 'idle') return;
-  driftTimer = setTimeout(() => {
-    if (mode !== 'idle') return;
-    wear(DRIFT[Math.floor(Math.random() * DRIFT.length)]);
-    clearTimeout(revertTimer);
-    revertTimer = setTimeout(() => mode === 'idle' && wear('grin'), 5000);
-    drift();
-  }, 20000 + Math.random() * 22000);
+function faces() {
+  return playing && mode === 'idle' ? MOODS.play : MOODS[mode] || MOODS.idle;
+}
+
+// A new face from the set that fits, never the same twice in a row; while she waits on you (alert)
+// or sleeps, she keeps the one she has.
+function shuffle() {
+  const list = faces();
+  let name = list[Math.floor(Math.random() * list.length)];
+  if (list.length > 1 && name === last) name = list[(list.indexOf(name) + 1) % list.length];
+  last = name;
+  wear(name);
+
+  clearTimeout(shuffleTimer);
+  if (mode === 'alert' || mode === 'sleep') return;
+  const base = mode === 'work' ? 8000 : playing ? 6500 : 9500;
+  shuffleTimer = setTimeout(shuffle, base + Math.random() * 5500);
 }
 
 function setMode(next) {
-  mode = MODE_FACE[next] ? next : 'idle';
+  mode = MOODS[next] ? next : 'idle';
   cam.dataset.mode = mode;
-  wear(MODE_FACE[mode]);
-  drift();
+  shuffle();
+}
+
+function setPlaying(on) {
+  if (playing === on) return;
+  playing = on;
+  if (mode === 'idle') shuffle();
 }
 
 // her bob stays at a tempo of her own, 96 to 128
@@ -67,11 +107,12 @@ function bpmOf(name = '', by = '') {
 }
 
 function paintMusic(m) {
-  const playing = Boolean(m?.playing);
-  cam.dataset.playing = playing ? 'on' : 'off';
-  if (playing) beat.style.setProperty('--beat', `${(60 / bpmOf(m.title, m.artist)).toFixed(3)}s`);
-  foot.hidden = !playing;
-  if (!playing) return;
+  const on = Boolean(m?.playing);
+  cam.dataset.playing = on ? 'on' : 'off';
+  if (on) beat.style.setProperty('--beat', `${(60 / bpmOf(m.title, m.artist)).toFixed(3)}s`);
+  foot.hidden = !on;
+  setPlaying(on);
+  if (!on) return;
   title.textContent = m.title || '';
   artist.textContent = m.artist || '';
   art.hidden = !m.art;
@@ -93,7 +134,6 @@ async function boot() {
     img.src = DIR + file;
   })));
 
-  wear('grin', { glitch: false });
   setMode('idle');
 
   host.onMusic(paintMusic);
