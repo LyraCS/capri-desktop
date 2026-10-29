@@ -138,9 +138,10 @@ with your login keychain and stored in the app's config folder.
 
 ## Music
 
-Ask her to play something and she looks it up in **Apple Music**: Apple's own search (no key) finds the song and
-the Music app opens on its page, that track under the cursor — one click, or Space, starts it. A link can open a
-song in Apple Music, not start it, so she gets you to the song but can't press play for you.
+Ask her to play something and she plays it in **Apple Music**: Apple's own search (no key) finds the song, the
+Music app opens on its album and she starts it, skipping to the track. Music only starts an album's queue from
+its first track, and only when it was stopped, so she stops what was playing, plays the album and skips — about
+three seconds. If the song isn't found, or the album doesn't load, she leaves its page open and says so.
 
 menu › **Music plays in** switches that to **Spotify** (a search in the app) or **YouTube** (the right video, in
 your browser). Saying "on Apple Music", "on Spotify" or "on YouTube" in your message overrides it for that song.

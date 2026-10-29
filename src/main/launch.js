@@ -299,24 +299,91 @@ async function music(query) {
   return true;
 }
 
-// The song in Apple Music: Apple's own search (no key) finds it, and the Music app opens on its page,
-// that track under the cursor (music:// - one click, or Space, starts it: Apple lets a link open a song
-// but not play it). { title, artist } of what it found, or { title: null } for its search page.
-async function appleMusic(query) {
+// The song in Apple Music: Apple's own search (no key) finds it, and the Music app plays it. Music starts
+// an album's queue from its first track and only when it was stopped, so she stops it, opens the song's
+// page, plays, then skips to the song ({ at } in the album, discs counted first).
+const ITUNES = 'https://itunes.apple.com';
+
+async function appleTrack(query) {
   const q = String(query || '').trim().slice(0, 200);
   if (!q) return null;
-  let hit = null;
+  const res = await fetch(`${ITUNES}/search?term=${encodeURIComponent(q)}&entity=song&limit=1&media=music`, {
+    signal: AbortSignal.timeout(7000),
+  });
+  const hit = res.ok ? (await res.json())?.results?.[0] : null;
+  if (!hit?.trackViewUrl) return null;
+  let at = Number(hit.trackNumber) || 1;
   try {
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1&media=music`, {
-      signal: AbortSignal.timeout(7000),
-    });
-    if (res.ok) hit = (await res.json())?.results?.[0] || null;
+    // where it sits in the album as the app queues it: disc 1's tracks, then disc 2's
+    const album = await fetch(`${ITUNES}/lookup?id=${hit.collectionId}&entity=song&limit=200`, { signal: AbortSignal.timeout(7000) });
+    const tracks = album.ok ? (await album.json())?.results?.filter((t) => t.wrapperType === 'track') || [] : [];
+    tracks.sort((a, b) => (a.discNumber || 1) - (b.discNumber || 1) || (a.trackNumber || 0) - (b.trackNumber || 0));
+    const i = tracks.findIndex((t) => t.trackId === hit.trackId);
+    if (i >= 0) at = i + 1;
   } catch {
-    // offline, or Apple's search is down: its search page still opens
+    // no album list: its own track number is a good guess
   }
-  const page = hit?.trackViewUrl?.replace(/^https:\/\/music\.apple\.com\//, 'music://music.apple.com/');
-  await shell.openExternal(page || `music://music.apple.com/us/search?term=${encodeURIComponent(q)}`);
-  return { title: hit?.trackName || null, artist: hit?.artistName || null };
+  return {
+    title: hit.trackName,
+    artist: hit.artistName,
+    album: hit.collectionName || '',
+    url: hit.trackViewUrl.replace(/^https:\/\/music\.apple\.com\//, 'music://music.apple.com/'),
+    at,
+  };
+}
+
+// One AppleScript answer: its last line, or null when it failed.
+function oscript(script) {
+  return new Promise((resolve) => {
+    execFile('osascript', ['-e', script], { timeout: 20000 }, (err, out) => resolve(err ? null : String(out).trim()));
+  });
+}
+
+const titleKey = (s) => plain(s).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+// What plays right now, or null.
+async function nowPlaying() {
+  const name = await oscript('tell application "Music" to get name of current track');
+  if (name === null) return null;
+  const album = await oscript('tell application "Music" to get album of current track');
+  return { name, album: album || '' };
+}
+
+// Music starts an album's queue from its first track (and only when it was stopped): stop it, open the
+// song's page, play, then skip to the song, checking as it goes. True when it is playing it.
+async function applePlay(track) {
+  const target = titleKey(track.title);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await oscript('tell application "Music" to stop');
+    await shell.openExternal(track.url);
+    await new Promise((r) => setTimeout(r, 1500 + attempt * 1500)); // the page has to be up first
+    await oscript('tell application "Music" to play');
+    await new Promise((r) => setTimeout(r, 800)); // and the queue takes a moment to start
+    const start = await nowPlaying();
+    // another album (the page hadn't loaded: it played what was there before): start over
+    if (!start || titleKey(start.album) !== titleKey(track.album)) continue;
+    const skips = Math.max(0, track.at - 1);
+    if (skips) await oscript(`tell application "Music"\n  repeat ${skips} times\n    next track\n  end repeat\nend tell`);
+    // the skips are queued in the app: wait for them to land on the song
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      const now = await nowPlaying();
+      if (now && titleKey(now.name) === target) return true;
+    }
+  }
+  return false;
+}
+
+async function appleMusic(query) {
+  const track = await appleTrack(query).catch(() => null);
+  if (!track) {
+    const q = String(query || '').trim().slice(0, 200);
+    await shell.openExternal(`music://music.apple.com/us/search?term=${encodeURIComponent(q)}`);
+    return { title: null, playing: false };
+  }
+  const playing = MAC ? await applePlay(track) : false;
+  if (!playing) await shell.openExternal(track.url); // at least its page, ready to play
+  return { title: track.title, artist: track.artist, playing };
 }
 
 // A song on YouTube, the exact video: the first result of a search (no key needed), opened in your

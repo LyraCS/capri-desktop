@@ -554,15 +554,15 @@ export class Chat {
     return { line: res.title ? fmt(this.t.youtube, { title: res.title }) : fmt(this.t.youtubeSearch, { song }), face: 'laugh' };
   }
 
-  // The song in Apple Music (its page in the Music app, that track under the cursor).
+  // The song in Apple Music: playing, or its page open when the app wouldn't start it.
   async appleMusic(song) {
     this.zap();
     const res = await this.host.appleMusic(song);
     if (!res) return null;
-    return {
-      line: res.title ? fmt(this.t.appleMusic, { title: res.title, artist: res.artist }) : fmt(this.t.appleMusicSearch, { song }),
-      face: 'laugh',
-    };
+    const line = !res.title ? fmt(this.t.appleMusicSearch, { song })
+      : res.playing ? fmt(this.t.appleMusic, { title: res.title, artist: res.artist })
+      : fmt(this.t.appleMusicOpen, { title: res.title });
+    return { line, face: 'laugh' };
   }
 
   // A search in Spotify, the app if it's there.
