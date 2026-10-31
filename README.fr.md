@@ -32,8 +32,8 @@ glitche, commente chaque action, vient te chercher quand elle attend ta permissi
   si `/api/show` dit que le modèle en a — un vieux modèle local se dégrade au lieu de casser.
 - **Ses outils de fichiers lui donnent les vrais chemins** : « ouvre la note que tu as trouvée » ouvre la note, et
   la lecture du presse-papiers sur macOS rend le texte au lieu de `[object Promise]`.
-- **Son mini-écran est une webcam maintenant.** 16:9, les images que tu as mises dans `assets/capri/faces/`
-  (embarquées, remplaçables depuis le dossier utilisateur), une plaque dessinée en CSS — bordure violette, le
+- **Son mini-écran est une webcam maintenant.** 16:9, ses visages tirés des images embarquées dans
+  `assets/capri/faces/` (un dossier dans ses données les remplace), une plaque dessinée en CSS — bordure violette, le
   bandeau vert *PROJECT CAPRICORN* à droite, coin chanfreiné, patte rouge — des lignes de balayage, du grain et
   une bande de rafraîchissement dans l'image, et un soubresaut toutes les 12 à 48 s à 30 fps. Elle s'allume au
   démarrage, pas seulement quand tu la bascules.
