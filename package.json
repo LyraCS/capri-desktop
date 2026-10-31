@@ -1,6 +1,6 @@
 {
   "name": "capri-desktop",
-  "version": "1.2.4",
+  "version": "1.3.0",
   "description": "Capri, the Project Capricorn construct, living on your desktop and narrating what Claude Code is doing.",
   "author": "mochiiwuff",
   "repository": "github:mochiiwuff/capri-desktop",
@@ -23,6 +23,8 @@
     "hooks:opencode:install": "node scripts/install-opencode-plugin.js",
     "hooks:opencode:uninstall": "node scripts/install-opencode-plugin.js --uninstall",
     "test:opencode": "node --test tests/opencode.test.js",
+    "test:llm": "node --test tests/llm-tools.test.js tests/chat-tools.test.js",
+    "test:hermes": "node --test tests/hermes.test.js",
     "test:mac": "node scripts/build-mac-helper.js && node --test tests/mac-helper.test.js",
     "dist:mac": "node scripts/build-mac-helper.js && electron-builder --mac"
   },

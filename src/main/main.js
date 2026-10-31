@@ -23,6 +23,7 @@ const launch = require('./launch');
 const files = require('./files');
 const music = require('./music');
 const { ASSISTANTS, assistant } = require('./assistants');
+const hermes = require('./hermes');
 const activeAssistant = () => assistant(config.load().assistant); // Claude Code or Codex
 const activeHooks = () => activeAssistant().hooks;
 const demoSteps = require('../../scripts/demo-sequence');
@@ -33,7 +34,12 @@ const PORT = Number(process.env.CAPRI_PORT) || 47823;
 const MAC = process.platform === 'darwin';
 // put her away / bring her back: Control+Alt+C on Windows, Command+Control+C on macOS
 const SHORTCUT = MAC ? 'Command+Control+C' : 'Control+Alt+C';
+// and two more, from anywhere: one to talk to her, one for her mini-box. Command+Control is a combo
+// almost nothing else claims (Command+Shift+C opens Chrome's inspector).
+const CHAT_SHORTCUT = MAC ? 'Command+Control+K' : 'Control+Alt+K';
+const BOX_SHORTCUT = MAC ? 'Command+Control+B' : 'Control+Alt+B';
 const SOUND_EXT = /\.(mp3|wav|ogg|m4a)$/i;
+const FACE_EXT = /\.(png|jpe?g|webp|gif)$/i;
 
 const OLLAMA_SITE = 'https://ollama.com';
 
@@ -59,6 +65,8 @@ let cloud = { at: 0, account: null, free: [] };
 const chats = new Map(); // id -> AbortController of an answer being streamed
 
 const userSoundsDir = () => path.join(app.getPath('userData'), 'sounds');
+// her faces in the mini-box: the pictures the person running her put there, never shipped with her
+const userFacesDir = () => path.join(app.getPath('userData'), 'faces');
 
 // Her memory of your chats, across restarts: { history: [{ role, content }], claude: Claude Code's session }
 const memoryFile = () => path.join(app.getPath('userData'), 'memory.json');
@@ -242,10 +250,11 @@ function sendCommand(name, payload = {}) {
 // A little always-on-top window with her in it, for the corner of a screen or a stream: she lives
 // in it (the overlay's own sprite hides), it drags anywhere, and it remembers where you put it.
 
+// 16:9, like a webcam: her face framed the way a stream would show it, not a square badge
 const BOX_SIZES = {
-  small: { width: 240, height: 240 },
-  medium: { width: 300, height: 300 },
-  large: { width: 360, height: 360 },
+  small: { width: 320, height: 180 },
+  medium: { width: 400, height: 225 },
+  large: { width: 480, height: 270 },
 };
 
 const boxSize = () => BOX_SIZES[config.load().box?.size] || BOX_SIZES.medium;
@@ -287,6 +296,10 @@ function createBox() {
   const cfg = config.load().box || {};
   const { width, height } = boxSize();
   const at = Number.isFinite(cfg.x) && Number.isFinite(cfg.y) ? { x: cfg.x, y: cfg.y } : boxStart();
+  // the corner it was saved at was right for the size it had then: a wider tile would hang off the screen
+  const { workArea } = targetDisplay();
+  at.x = Math.max(workArea.x, Math.min(at.x, workArea.x + workArea.width - width));
+  at.y = Math.max(workArea.y, Math.min(at.y, workArea.y + workArea.height - height));
   box = new BrowserWindow({
     ...at,
     width,
@@ -314,7 +327,13 @@ function createBox() {
   box.setAlwaysOnTop(true, 'floating');
   box.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   box.loadFile(path.join(ROOT, 'src', 'renderer', 'box.html'));
-  box.once('ready-to-show', () => box && !box.isDestroyed() && box.showInactive());
+  box.once('ready-to-show', () => {
+    if (!box || box.isDestroyed()) return;
+    box.showInactive();
+    // the set switching on: the power-on animation belongs to the window appearing, not to the page
+    // loading — at startup it used to play while the window was still hidden, and never be seen
+    sendToBox('box:show');
+  });
   box.on('moved', () => {
     clearTimeout(boxSaveTimer);
     boxSaveTimer = setTimeout(() => {
@@ -551,7 +570,7 @@ function rebuildTray() {
     { label: t.demo, click: playDemo },
     { label: t.help, click: () => sendCommand('welcome') },
     ...(cfg.claude ? [{ label: t.report, click: () => sendCommand('report') }] : []),
-    { label: t.talk, click: () => sendCommand('chat') },
+    { label: t.talk, accelerator: CHAT_SHORTCUT, registerAccelerator: false, click: () => sendCommand('chat') },
     { label: t.lookNow, click: () => sendCommand('look') },
     {
       label: t.reminders,
@@ -574,7 +593,15 @@ function rebuildTray() {
     {
       label: t.box,
       submenu: [
-        { label: t.boxShow, type: 'checkbox', checked: boxed(), click: (item) => toggleBox(item.checked) },
+        { label: t.boxShow, type: 'checkbox', checked: boxed(), accelerator: BOX_SHORTCUT, registerAccelerator: false, click: (item) => toggleBox(item.checked) },
+        {
+          // the pictures she wears in it: hidden in ~/Library, so this is how you find the folder
+          label: t.facesDir,
+          click: () => {
+            fs.mkdirSync(userFacesDir(), { recursive: true });
+            shell.openPath(userFacesDir());
+          },
+        },
         { type: 'separator' },
         ...Object.keys(BOX_SIZES).map((size) => ({
           label: size === 'small' ? t.small : size === 'large' ? t.large : t.medium,
@@ -847,15 +874,15 @@ async function signInToOllama() {
 // (Gemini's "high demand", an Ollama cloud model out of free use), not served anymore (an older model
 // closed to new keys), or signed out of Ollama. A model on this PC first. The model that answered is
 // kept for next time.
-async function chatWithFallback(cfg, messages, send, signal, streamed) {
+async function chatWithFallback(cfg, messages, send, signal, streamed, tools) {
   let model = pickModel(cfg);
   const tried = new Set();
   let busy = 0;
   for (;;) {
     try {
-      const text = await llm.chat(cfg.provider, llmConfig(cfg), { model, messages }, send, signal);
+      const res = await llm.chat(cfg.provider, llmConfig(cfg), { model, messages, tools }, send, signal);
       if (model !== pickModel(cfg)) updateConfig({ chatModel: model });
-      return text;
+      return res;
     } catch (err) {
       if (signal.aborted || streamed() || !['busy', 'gone', 'signin'].includes(err.code)) throw err;
       if (err.code === 'busy' && busy++ === 0) {
@@ -905,7 +932,7 @@ async function sayAboutSnap({ id, persona, prompt, history = [] }) {
   const messages = [{ role: 'system', content: persona }, ...before, user];
   for (let attempt = 0; ; attempt++) {
     try {
-      const text = await llm.chat(cfg.provider, llmConfig(cfg), { model, messages }, () => {}, AbortSignal.timeout(120000));
+      const { text } = await llm.chat(cfg.provider, llmConfig(cfg), { model, messages }, () => {}, AbortSignal.timeout(120000));
       return { ok: true, text, model };
     } catch (err) {
       if (err.code === 'busy' && attempt === 0) {
@@ -1002,10 +1029,13 @@ function registerIpc() {
     const model = pickModel();
     llm.warm(provider, model); // loading while you type your first message
     const local = llm.isLocal(provider, cfg, model);
-    return { ok: true, provider, model, agent: provider === 'claude', local, warmup: provider === 'ollama' && local };
+    // her tool calling (chat.js): the provider takes tools, and a local model says it does
+    const tools = llm.supportsTools(provider) && (provider !== 'ollama' || (await ollama.canTools(model)));
+    return { ok: true, provider, model, agent: provider === 'claude', local, tools, warmup: provider === 'ollama' && local };
   });
-  // her answer, streamed to the overlay piece by piece as `chat:delta`
-  ipcMain.handle('chat:send', async (_e, { id, messages }) => {
+  // her answer, streamed to the overlay piece by piece as `chat:delta`; with her tools, the calls it
+  // asked for come back too (the overlay runs them and asks again)
+  ipcMain.handle('chat:send', async (_e, { id, messages, tools }) => {
     const abort = new AbortController();
     chats.set(id, abort);
     try {
@@ -1015,9 +1045,9 @@ function registerIpc() {
         overlay?.webContents.send('chat:delta', { id, text });
       };
       const cfg = config.load();
-      const text = await chatWithFallback(cfg, messages, send, abort.signal, () => streamed);
+      const res = await chatWithFallback(cfg, messages, send, abort.signal, () => streamed, Array.isArray(tools) ? tools : null);
       if (cfg.provider === 'claude') saveMemory({ claude: llm.claudeMemory() });
-      return { ok: true, text };
+      return { ok: true, text: res.text, calls: res.calls || [], ...(res.noTools && { noTools: true }) };
     } catch (err) {
       return { ok: false, error: abort.signal.aborted ? 'stopped' : err.message, code: err.code || null };
     } finally {
@@ -1136,6 +1166,10 @@ function registerIpc() {
   // your files (files.js): a search, opening what it found, a screenshot, a search on the web
   ipcMain.handle('files:search', (_e, query) => files.search(query).catch(() => []));
   ipcMain.handle('files:open', (_e, { file, reveal }) => files.open(String(file), { reveal: Boolean(reveal) }).then(() => true, () => false));
+  ipcMain.handle('files:read', (_e, file) => files.read(String(file)));
+  // what the user last copied: her chat only, when what they said is about it
+  // (readText is a promise in this Electron, and a plain string in the older ones)
+  ipcMain.handle('clipboard:read', async () => String((await clipboard.readText()) || '').slice(0, 2000));
   ipcMain.handle('files:screenshot', () => files.screenshot(targetDisplay()).catch(() => null));
   ipcMain.handle('web:search', (_e, query) => {
     const q = String(query || '').trim().slice(0, 300);
@@ -1156,7 +1190,7 @@ function registerIpc() {
     lastMode = String(mode || 'idle');
     sendToBox('box:mode', lastMode);
   });
-  ipcMain.handle('apps:site', (_e, address) => launch.site(address).catch(() => false));
+  ipcMain.handle('apps:site', (_e, address, app) => launch.site(address, app).catch(() => false));
   // typing to her: the overlay takes the keyboard while the chat is open, and gives it back after
   ipcMain.on('overlay:focus', (_e, on) => {
     if (!overlay) return;
@@ -1201,6 +1235,20 @@ function registerIpc() {
     } catch {
       return [];
     }
+  });
+  // the pictures she wears in her mini-box, as file:// urls (it is a file:// page, so a capri:// url
+  // is refused there): `mine` is the folder the person running her keeps, `shipped` is the one that
+  // travels inside the app (assets/capri/faces). Hers win; empty, she wears the eight face-*.png.
+  ipcMain.handle('faces:list', () => {
+    const read = (dir) => {
+      try {
+        return fs.readdirSync(dir).filter((f) => FACE_EXT.test(f)).sort()
+          .map((f) => pathToFileURL(path.join(dir, f)).toString());
+      } catch {
+        return [];
+      }
+    };
+    return { mine: read(userFacesDir()), shipped: read(path.join(ROOT, 'assets', 'capri', 'faces')) };
   });
 }
 
@@ -1268,9 +1316,14 @@ async function debugHandler(route, body) {
     if (body.click) find(trayMenu)?.click();
     return { ok: true, value: items(trayMenu) };
   }
+  if (route === 'keys') {
+    // her global keys as the OS holds them: a combo another app owns never fires, and never says so
+    return { ok: true, value: [SHORTCUT, CHAT_SHORTCUT, BOX_SHORTCUT].map((k) => [k, globalShortcut.isRegistered(k)]) };
+  }
   if (route === 'eval') {
     // a look inside the overlay (app.js puts what's there on window.dev in --dev)
-    return { ok: true, value: await overlay.webContents.executeJavaScript(String(body.js || 'null')) };
+    const win = body.box && box && !box.isDestroyed() ? box : overlay;
+    return { ok: true, value: await win.webContents.executeJavaScript(String(body.js || 'null')) };
   }
   if (route === 'drag') {
     // a drag over the overlay with a stand-in pointer, the real one untouched: the button goes down
@@ -1298,7 +1351,9 @@ async function debugHandler(route, body) {
     return { ok: true };
   }
   if (route === 'capture') {
-    const image = await overlay.webContents.capturePage();
+    // the mini-box too: it is a separate window, and it is the one the eye checks
+    const win = body.box && box && !box.isDestroyed() ? box : overlay;
+    const image = await win.webContents.capturePage();
     // installed, the app's own folder is read-only: its data folder instead
     const dir = path.join(app.isPackaged ? app.getPath('userData') : ROOT, 'captures');
     fs.mkdirSync(dir, { recursive: true });
@@ -1352,10 +1407,33 @@ function main() {
     createBridge({
       port: PORT,
       // her own Claude Code chat's hooks would cover its answer with theirs
-      onEvent: (evt) => !llm.isChatSession(evt.session_id) && overlay?.webContents.send('claude:event', evt),
+      // (a Hermes Agent event comes in through the same bridge, translated first — undefined means it
+      // wasn't one of its, and goes on untouched)
+      onEvent: (raw) => {
+        const publish = (evt) => {
+          if (!overlay || overlay.isDestroyed() || llm.isChatSession(evt.session_id)) return;
+          overlay.webContents.send('claude:event', evt);
+        };
+        const evt = hermes.event(raw, publish);
+        if (evt === undefined) publish(raw);
+        else if (evt) publish(evt);
+      },
       onDebug: DEV ? debugHandler : null,
     });
-    globalShortcut.register(SHORTCUT, () => toggleVisible());
+    // hers: what she is doing, talking to her, and her mini-box — from anywhere
+    const keys = [
+      [SHORTCUT, () => toggleVisible()],
+      [CHAT_SHORTCUT, () => {
+        if (!overlay || overlay.isDestroyed()) return;
+        overlay.showInactive();
+        sendCommand('chat');
+      }],
+      [BOX_SHORTCUT, () => toggleBox(!boxed())],
+    ];
+    for (const [key, run] of keys) {
+      // another app can already own a combo (or macOS refuses it): say so instead of a key that never fires
+      if (!globalShortcut.register(key, run)) console.error(`[capri] shortcut ${key} is taken, not watching it`);
+    }
     // --dev / CI: a picture of the overlay, taken by Chromium itself (no Screen Recording needed)
     if (DEV && process.env.CAPRI_SNAPSHOT) {
       setTimeout(async () => {

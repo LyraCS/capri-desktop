@@ -90,18 +90,40 @@ function warm(id, model) {
   if (PROVIDERS[id].kind === 'ollama') ollama.warm(model);
 }
 
-// OpenAI-style streaming (server-sent events): onDelta(piece) as it comes, resolves with all of it.
-async function openaiChat(p, { model, messages }, onDelta, signal) {
-  const res = await fetch(`${p.url}/chat/completions`, {
+const parseArgs = (raw) => {
+  try {
+    return JSON.parse(raw || '{}');
+  } catch {
+    return {}; // arguments still coming apart, or not JSON: the tool gets nothing to go on
+  }
+};
+
+// OpenAI-style streaming (server-sent events): onDelta(piece) as it comes, resolves with all of it,
+// and with the tool calls the model asked for (her tools, chat.js), if any.
+async function openaiChat(p, { model, messages, tools }, onDelta, signal) {
+  const ask = (withTools) => fetch(`${p.url}/chat/completions`, {
     method: 'POST',
     headers: headers(p.key),
-    body: JSON.stringify({ model, messages, stream: true }),
+    body: JSON.stringify({ model, messages, stream: true, ...(withTools && { tools, tool_choice: 'auto' }) }),
     signal,
   });
+  let res = await ask(Boolean(tools?.length));
+  // A model that can't take tools answers 400: ask again without them, and the overlay falls back to
+  // its own plain-language guess for that message (it reads `noTools`).
+  const noTools = res.status === 400 && Boolean(tools?.length);
+  if (noTools) res = await ask(false);
   if (!res.ok) throw await failure(res);
   const decoder = new TextDecoder();
   let buffer = '';
   let text = '';
+  const calls = new Map(); // index -> the call being assembled across deltas
+  const finish = () => ({
+    text,
+    calls: [...calls].sort(([a], [b]) => a - b)
+      .map(([, call]) => ({ id: call.id || `call_${call.name}`, name: call.name, arguments: parseArgs(call.raw) }))
+      .filter((call) => call.name),
+    ...(noTools && { noTools: true }),
+  });
   for await (const chunk of res.body) {
     buffer += decoder.decode(chunk, { stream: true });
     let nl;
@@ -110,17 +132,27 @@ async function openaiChat(p, { model, messages }, onDelta, signal) {
       buffer = buffer.slice(nl + 1);
       if (!line.startsWith('data:')) continue;
       const data = line.slice(5).trim();
-      if (data === '[DONE]') return text;
+      if (data === '[DONE]') return finish();
       const msg = JSON.parse(data);
       if (msg.error) throw new Error(msg.error.message || msg.error);
-      const piece = msg.choices?.[0]?.delta?.content || ''; // reasoning comes apart, and is left out
+      const delta = msg.choices?.[0]?.delta || {};
+      const piece = delta.content || ''; // reasoning comes apart, and is left out
       if (piece) {
         text += piece;
         onDelta(piece);
       }
+      // tool calls come apart too: the id and name once, the arguments a few characters at a time
+      for (const call of delta.tool_calls || []) {
+        const at = call.index ?? 0;
+        const slot = calls.get(at) || { id: '', name: '', raw: '' };
+        if (call.id) slot.id = call.id;
+        if (call.function?.name) slot.name = call.function.name;
+        if (call.function?.arguments) slot.raw += call.function.arguments;
+        calls.set(at, slot);
+      }
     }
   }
-  return text;
+  return finish();
 }
 
 // --- Claude Code ---------------------------------------------------------------------------------
@@ -210,13 +242,20 @@ function restoreClaude(saved) {
 
 const isChatSession = (id) => Boolean(id) && id === claudeSession;
 
-async function chat(id, cfg, { model, messages }, onDelta, signal) {
+async function chat(id, cfg, { model, messages, tools }, onDelta, signal) {
   const p = endpoint(id, cfg);
-  if (p.kind === 'ollama') return ollama.chat({ model, messages }, onDelta, signal);
+  if (p.kind === 'ollama') return ollama.chat({ model, messages, tools }, onDelta, signal);
   // Claude Code keeps its own memory of the conversation: only her persona and your last message go
-  if (p.kind === 'claude') return claudeChat(cfg, messages.at(-1).content, messages[0].content, onDelta, signal);
-  return openaiChat(p, { model, messages }, onDelta, signal);
+  if (p.kind === 'claude') {
+    const text = await claudeChat(cfg, messages.at(-1).content, messages[0].content, onDelta, signal);
+    return { text, calls: [] };
+  }
+  return openaiChat(p, { model, messages, tools }, onDelta, signal);
 }
+
+// Whether her chat can ask this provider for tool calls. Claude Code has its own tools and runs them
+// itself, so hers go through its prompt instead.
+const supportsTools = (id) => PROVIDERS[id]?.kind !== 'claude';
 
 // A router lists models it can't answer with (one that isn't a chat model, one its provider has retired):
 // a one-token question to each until one answers, so she doesn't start on a dead one. Null when none did.
@@ -252,4 +291,4 @@ function isLocal(id, cfg, model) {
   return Boolean(PROVIDERS[id].local);
 }
 
-module.exports = { isLocal, PROVIDERS, CLAUDE_MODES, models, warm, chat, firstWorking, resetClaude, isChatSession, claudeMemory, restoreClaude };
+module.exports = { isLocal, PROVIDERS, CLAUDE_MODES, models, warm, chat, supportsTools, firstWorking, resetClaude, isChatSession, claudeMemory, restoreClaude };

@@ -3,17 +3,42 @@
 # Capri
 
 Capri, le construct du *Project Capricorn* (Cyberpunk: Edgerunners, saison 2), vit sur ton bureau
-et te raconte ce que fait ton IA de code, **Claude Code**, **Codex** ou **Antigravity** : elle se téléporte,
+et te raconte ce que fait ton IA de code, **Claude Code**, **Codex**, **Antigravity**, **OpenCode** ou **Hermes Agent** : elle se téléporte,
 glitche, commente chaque action, vient te chercher quand elle attend ta permission et part en vrille quand la tâche est finie.
 
 > **Sur macOS ?** Ce fork tourne nativement sur Apple Silicon (et Intel, en compilant depuis le code). Elle vit dans
 > la barre des menus (`⌘⌃C` la range), s'assoit sur tes fenêtres, se pose sur le Dock, et surveille OpenCode via
-> son API de plugins. **[Télécharger la version macOS](https://github.com/LyraCS/capri-desktop/releases/latest)** ;
+> son API de plugins et Hermes Agent via ses webhooks. **[Télécharger la version macOS](https://github.com/LyraCS/capri-desktop/releases/latest)** ;
 > voir **[MACOS.md](MACOS.md)** pour les détails, les autorisations et le build.
 
 ![Capri annonce que Claude a terminé](docs/done.png)
 
 ![Téléportation, image par image](docs/teleport.png)
+
+## Nouveau dans la 1.3.0
+
+- **Elle surveille aussi Hermes Agent.** Hermes n'a pas d'API de plugins où s'installer, alors il la prévient
+  par ses propres webhooks sortants : `scripts/install-hermes-hooks.js` écrit une entrée, et
+  `src/main/hermes.js` traduit les événements de Hermes dans le vocabulaire de Claude Code. Choisis-la dans
+  **Surveiller › Hermes Agent** ; elle le nomme dans les cinq langues et en devient jalouse comme des autres.
+- **Elle agit, elle ne parle plus seulement.** Son chat a des outils : ouvrir une appli ou un site, lancer de la
+  musique, trouver un fichier et l'ouvrir, chercher sur le web, fermer une fenêtre, retenir quelque chose. Le
+  modèle choisit l'outil et le moment ; le résultat lui revient pour un autre tour, quatre au plus. Les modèles
+  sans outils gardent l'ancien chemin `[[tag]]`.
+- **Deux choses dans un seul message.** « Ouvre Safari et va sur YouTube » lançait Safari et s'arrêtait là.
+  `open_site` prend maintenant l'appli où atterrir, `launch.js` lance `open -a Safari <url>`, et quand un petit
+  modèle n'ouvre que l'appli, elle ouvre le site qu'elle a entendu dans ton message dedans.
+- **Un fournisseur qui refuse les outils est redemandé sans eux**, et sur Ollama elle ne propose des outils que
+  si `/api/show` dit que le modèle en a — un vieux modèle local se dégrade au lieu de casser.
+- **Ses outils de fichiers lui donnent les vrais chemins** : « ouvre la note que tu as trouvée » ouvre la note, et
+  la lecture du presse-papiers sur macOS rend le texte au lieu de `[object Promise]`.
+- **Son mini-écran est une webcam maintenant.** 16:9, les images que tu as mises dans `assets/capri/faces/`
+  (embarquées, remplaçables depuis le dossier utilisateur), une plaque dessinée en CSS — bordure violette, le
+  bandeau vert *PROJECT CAPRICORN* à droite, coin chanfreiné, patte rouge — des lignes de balayage, du grain et
+  une bande de rafraîchissement dans l'image, et un soubresaut toutes les 12 à 48 s à 30 fps. Elle s'allume au
+  démarrage, pas seulement quand tu la bascules.
+- **Une nouvelle icône**, et la planche de glitch a disparu : aucune image générée ne part avec elle.
+- **`--dev` peut viser le mini-écran** : `/debug/capture` et `/debug/eval` acceptent `{"box": true}`.
 
 ## Ce qu'elle fait
 

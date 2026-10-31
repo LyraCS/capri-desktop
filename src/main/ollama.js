@@ -81,8 +81,22 @@ function warm(model) {
   }).catch(() => {});
 }
 
-// Her answer, streamed: onDelta(piece) as it comes, resolves with all of it.
-async function chat({ model, messages }, onDelta, signal) {
+// Ollama's native API names the tool on its result (`tool_name`), where OpenAI carries the call's id
+// (`tool_call_id`): the results are rewritten before they go, the rest of the conversation untouched.
+function wireMessages(messages) {
+  const names = new Map();
+  return messages.map((msg) => {
+    if (msg.role === 'assistant') for (const call of msg.tool_calls || []) names.set(call.id, call.function?.name);
+    if (msg.role !== 'tool') return msg;
+    const { tool_call_id, ...rest } = msg;
+    const name = names.get(tool_call_id);
+    return name ? { ...rest, tool_name: name } : rest;
+  });
+}
+
+// Her answer, streamed: onDelta(piece) as it comes, resolves with all of it and with the tool calls
+// she asked for (chat.js' tools), if any.
+async function chat({ model, messages, tools }, onDelta, signal) {
   // cloud models think before they answer, and that counts in num_predict: kept short, with room for it
   const thinks = isCloud(model) && known.get(model)?.thinking;
   const res = await fetch(`${base()}/api/chat`, {
@@ -90,10 +104,11 @@ async function chat({ model, messages }, onDelta, signal) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       model,
-      messages,
+      messages: tools?.length ? wireMessages(messages) : messages,
       stream: true,
       keep_alive: '15m', // she stays loaded while you chat
       ...(thinks && { think: 'low' }),
+      ...(tools?.length && { tools }),
       options: { temperature: 0.85, num_predict: thinks ? 1200 : 240 },
     }),
     signal,
@@ -102,6 +117,7 @@ async function chat({ model, messages }, onDelta, signal) {
   const decoder = new TextDecoder();
   let buffer = '';
   let text = '';
+  const calls = new Map(); // index -> that call (Ollama sends them whole, but not always with one)
   for await (const chunk of res.body) {
     buffer += decoder.decode(chunk, { stream: true });
     let nl;
@@ -116,10 +132,33 @@ async function chat({ model, messages }, onDelta, signal) {
         text += piece;
         onDelta(piece);
       }
-      if (msg.done) return text;
+      // Ollama hands the arguments over as an object already, where OpenAI sends a JSON string
+      for (const call of msg.message?.tool_calls || []) {
+        const at = call.index ?? calls.size;
+        let args = call.function?.arguments || {};
+        if (typeof args === 'string') {
+          try { args = JSON.parse(args || '{}'); } catch { args = {}; }
+        }
+        calls.set(at, { id: call.id || `call_${at}`, name: call.function?.name, arguments: args });
+      }
+      if (msg.done) return { text, calls: [...calls.values()].filter((call) => call.name) };
     }
   }
-  return text;
+  return { text, calls: [...calls.values()].filter((call) => call.name) };
+}
+
+// Whether a model can be handed tools: recent Ollama says so in its capabilities. Can't tell: yes,
+// and her chat falls back to its own guess if the model turns out not to (llm.js `noTools`).
+async function canTools(model) {
+  const res = await fetch(`${base()}/api/show`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model }),
+    signal: AbortSignal.timeout(5000),
+  }).catch(() => null);
+  if (!res?.ok) return true;
+  const info = await res.json().catch(() => ({}));
+  return !Array.isArray(info.capabilities) || info.capabilities.includes('tools');
 }
 
 // Whether a model can look at pictures (gemma3 can, llama3.2 can't). Can't tell: yes, try it.
@@ -135,4 +174,4 @@ async function canSee(model) {
   return !Array.isArray(info.capabilities) || info.capabilities.includes('vision');
 }
 
-module.exports = { base, models, isCloud, account, freeModels, warm, chat, canSee };
+module.exports = { base, models, isCloud, account, freeModels, warm, chat, canSee, canTools };

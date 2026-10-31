@@ -1,51 +1,25 @@
 // Her facecam: a square tile with her face in it, cut like the rest of her interface. It shows up when
 // you're not in a terminal or an editor (main.js decides), moves to the song, and stands still on pause.
-// Her faces are the sheets in assets/capri/ (sprites.png, and song vibes.png for when music plays), cut one
-// picture per cell by tools/cut-faces.swift; she shuffles them the whole time she's in the tile, and keeps
-// the ones that fit what she's doing.
+// Her faces are the sheets in assets/capri/ (sprites.png, and song vibes.png for when music plays), cut
+// one picture per cell by tools/cut-faces.swift; she shuffles them the whole time she's in the tile,
+// and keeps the ones that fit what she's doing. Unless the person running her put pictures of their
+// own in ~/Library/Application Support/capri-desktop/faces: those win, and no art ships with her.
 
 const host = window.host;
 const DIR = '../../assets/capri/';
 
-// row by row, as cut: f01 top left, f25 bottom right
-const FACES = {
-  grin: 'faces/f01.png', //   big grin, all fangs
-  laugh: 'faces/f02.png', //  eyes shut, laughing
-  star: 'faces/f03.png', //   star eyes, sparkles
-  angry: 'faces/f04.png', //  cross, the vein popping
-  huh: 'faces/f05.png', //    a question mark over her
-  sleepy: 'faces/f06.png', // Zzz
-  love: 'faces/f07.png', //   heart eyes
-  shock: 'faces/f08.png', //  the "!!"
-  sad: 'faces/f09.png', //    a sweat drop
-  smug: 'faces/f10.png', //   tongue out, smug
-  cry: 'faces/f11.png', //    a waterfall of tears
-  bored: 'faces/f12.png', //  a "..." bubble
-  dizzy: 'faces/f13.png', //  spiral eyes
-  blush: 'faces/f14.png', //  flustered
-  terror: 'faces/f15.png', // huge white eyes
-  doze: 'faces/f16.png', //   half shut
-  wink: 'faces/f17.png', //   a wink and a star
-  glare: 'faces/f18.png', //  eyes on you, not amused
-  fang: 'faces/f19.png', //   the sharp grin
-  shy: 'faces/f20.png', //    hiding her eyes
-  peek: 'faces/f21.png', //   one eye, sideways
-  roar: 'faces/f22.png', //   shouting
-  teary: 'faces/f23.png', //  welling up
-  wow: 'faces/f24.png', //    round eyes, a little o
-  blep: 'faces/f25.png', //   tongue, again
-  // song vibes (assets/capri/song vibes.png), her with headphones on
-  vibe1: 'vibes/v01.png', //   headphones, eyes shut, notes over her
-  vibe2: 'vibes/v02.png', //   grinning with the headphones on
-  vibe3: 'vibes/v03.png', //   humming, one hand up
-  vibe4: 'vibes/v04.png', //   drinking through a straw, headphones on
-  vibe5: 'vibes/v05.png', //   eyes gone round, a heart and a note
-  vibe6: 'vibes/v06.png', //   rocking out, lightning
-  vibe7: 'vibes/v07.png', //   horns up, tongue out
-  vibe8: 'vibes/v08.png', //   mane thrown back, eyes shut
-  vibe9: 'vibes/v09.png', //   headphones on, fangs out
-  vibe10: 'vibes/v10.png', //  mane flying, headphones on
-};
+// Her faces, when nobody put their own in her folder: the eight that came with her — the same art her
+// panel wears — cycled over the names the moods below ask for. The generated sheet she used to be cut
+// from is gone, and the vibes sheet with it.
+const ART = ['capri-face.png', 'face-look.png', 'face-laugh.png', 'face-smug.png',
+  'face-aside.png', 'face-wide.png', 'face-many.png', 'face-calm.png'];
+const NAMES = [
+  'grin', 'laugh', 'star', 'angry', 'huh', 'sleepy', 'love', 'shock', 'sad', 'smug',
+  'cry', 'bored', 'dizzy', 'blush', 'terror', 'doze', 'wink', 'glare', 'fang', 'shy',
+  'peek', 'roar', 'teary', 'wow', 'blep',
+  'vibe1', 'vibe2', 'vibe3', 'vibe4', 'vibe5', 'vibe6', 'vibe7', 'vibe8', 'vibe9', 'vibe10',
+];
+const FACES = Object.fromEntries(NAMES.map((name, i) => [name, ART[i % ART.length]]));
 
 // what she cycles through: idling, working, waiting on you, asleep, and while music plays
 const MOODS = {
@@ -56,67 +30,108 @@ const MOODS = {
   play: ['vibe1', 'vibe2', 'vibe3', 'vibe4', 'vibe5', 'vibe6', 'vibe7', 'vibe8', 'vibe9', 'vibe10'],
 };
 
-// the pieces cut out of assets/capri/glitch.png (tools/cut-glitch.swift), flashed over her face
-const GLITCH = Array.from({ length: 90 }, (_, i) => `../../assets/capri/glitch/g${String(i + 1).padStart(2, '0')}.png`);
-
 const cam = document.getElementById('cam');
 const face = document.getElementById('face');
-const glitchLayer = document.getElementById('glitch');
 const beat = document.getElementById('beat');
 const foot = document.getElementById('foot');
 const art = document.getElementById('art');
 const title = document.getElementById('title');
 const artist = document.getElementById('artist');
 
+// The set switching on. Main says when the window is really up (box:show): at startup the animation
+// used to play into a window that was still hidden, so you never saw it; toggling the tile later
+// raced the window and you did.
+function powerOn() {
+  cam.classList.remove('is-on');
+  void cam.offsetWidth; // restart it
+  cam.classList.add('is-on');
+}
+host.onBoxShow(powerOn);
+
 let mode = 'idle';
 let playing = false;
 let last = null;
 let shuffleTimer = null;
-let glitchTimer = null;
+let joltTimer = null;
 
-// One short burst of interference: a piece from her glitch sheet, somewhere over her face.
-function flash(n = 1) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  for (let i = 0; i < n; i++) {
-    const img = new Image();
-    img.alt = '';
-    // the bigger pieces read best: most bursts take one of those
-    const big = Math.random() < 0.7;
-    img.src = GLITCH[Math.floor(Math.random() * (big ? 34 : GLITCH.length))];
-    const width = 38 + Math.random() * 66; // % of the tile: bands right across it
-    img.style.width = `${width}%`;
-    img.style.left = `${Math.random() * Math.max(0, 100 - width * 0.7)}%`;
-    img.style.top = `${Math.random() * 88}%`;
-    const life = 220 + Math.random() * 340;
-    img.style.opacity = `${(0.9 + Math.random() * 0.1).toFixed(2)}`;
-    glitchLayer.appendChild(img);
-    // hard on, hard off, like a torn frame: no fade to miss
-    setTimeout(() => img.remove(), life);
-  }
+// What a tube does when it loses the picture for a moment — and gets it back. Everything the old
+// glitch sheet did (torn bands, colour fringing) is gone: this is only sync, roll, squeeze and the
+// brightness dipping, which is what a CRT actually does, and it never eats her face.
+const JOLT_MS = 240;
+const JOLT_STEP = 1000 / 30; // two display frames at 60Hz, four at 120: 30fps, like the rest of her
+const JOLTS = {
+  // an expression change: the picture slides and re-syncs (a touch oversize, so the slide shows no edge)
+  sync: () => [`translateY(${(Math.random() * 12 - 6).toFixed(1)}px) scale(1.06) scaleY(${(1 + Math.random() * 0.04).toFixed(3)})`, 1.1 + Math.random() * 0.5],
+  // vertical hold slipping: the picture runs up or down the tube
+  roll: () => [`translateY(${(Math.random() * 52 - 26).toFixed(1)}px) scale(1.06)`, 0.9 + Math.random() * 0.5],
+  // the frame stretches, like the set reletting — it must never shrink: a picture smaller than its
+  // window leaves black bars, and the one on the right hides behind the strip while the left shows
+  squeeze: () => [`scaleX(${(1.02 + Math.random() * 0.06).toFixed(3)}) scaleY(${(1 + Math.random() * 0.04).toFixed(3)})`, 1.2 + Math.random() * 0.6],
+  // the brightness dropping out of it for a frame or two
+  dip: () => ['', 0.35 + Math.random() * 0.4],
+};
+let joltUntil = 0;
+let joltRAF = 0;
+let joltAt = 0;
+let joltKind = 'sync';
+
+function still(el) {
+  el.style.transform = '';
+  el.style.filter = '';
 }
 
-// More of it when she's tense (waiting on you) or a song is playing, less when it's quiet.
-function scheduleGlitch() {
-  clearTimeout(glitchTimer);
+function jolt(kind = 'sync', ms = JOLT_MS) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  joltKind = JOLTS[kind] ? kind : 'sync';
+  joltUntil = Math.max(joltUntil, performance.now() + ms);
+  if (joltRAF) return;
+  const step = (now) => {
+    joltRAF = 0;
+    if (now >= joltUntil) {
+      still(face);
+      return;
+    }
+    joltRAF = requestAnimationFrame(step);
+    // four milliseconds of slack: a frame served at 33.4ms must not read as "not yet 33.33" and cost
+    // a whole step, which is how a 30fps run ends up at 20
+    if (now - joltAt < JOLT_STEP - 4) return;
+    joltAt = now;
+    const [transform, light] = JOLTS[joltKind]();
+    face.style.transform = transform;
+    face.style.filter = `brightness(${light.toFixed(2)}) contrast(1.08)`;
+  };
+  joltRAF = requestAnimationFrame(step);
+}
+
+// And now and then, unprompted: a tube that has been on for a while does something. More often when
+// she's waiting on you or music is playing, and never in the middle of nothing worth watching.
+function scheduleJolt() {
+  clearTimeout(joltTimer);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const busy = mode === 'alert' || playing;
-  const wait = busy ? 240 + Math.random() * 420 : 480 + Math.random() * 900;
-  glitchTimer = setTimeout(() => {
-    flash(2 + Math.floor(Math.random() * 3)); // two to four bands
-    scheduleGlitch();
+  const wait = busy ? 12000 + Math.random() * 18000 : 22000 + Math.random() * 26000;
+  joltTimer = setTimeout(() => {
+    const kinds = busy ? ['dip', 'roll', 'squeeze', 'sync'] : ['dip', 'roll'];
+    jolt(kinds[Math.floor(Math.random() * kinds.length)], 140 + Math.random() * 220);
+    scheduleJolt();
   }, wait);
 }
 
-// A new expression, hard-cut like her art: a glitch, then the new face.
-function wear(name, { glitch = true } = {}) {
-  const src = DIR + (FACES[name] || FACES.grin);
+// where the picture for a face name lives: the user's folder (capri://userfaces) when there is one,
+// else the sheet that ships
+const srcOf = (name) => {
+  const file = FACES[name] || FACES.grin;
+  return file.includes('://') ? file : DIR + file;
+};
+
+// A new expression, the way a set changes channel: the picture slips for a moment, then it's her new
+// face, settled.
+function wear(name, { jolt: animate = true } = {}) {
+  const src = srcOf(name);
   if (face.getAttribute('src') === src) return;
   face.setAttribute('src', src);
-  if (!glitch || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  face.classList.remove('is-glitch');
-  void face.offsetWidth; // restart the animation
-  face.classList.add('is-glitch');
-  flash(2); // and some of her glitch sheet with the cut
+  if (!animate) return;
+  jolt('sync');
 }
 
 function faces() {
@@ -179,17 +194,25 @@ async function boot() {
     document.fonts.load('700 16px "Chakra Petch"'),
     document.fonts.load('400 11px "JetBrains Mono"'),
   ]);
+  // Their own pictures, if they put any in her faces folder (file:// urls from main): one per
+  // expression name, in turn, so the moods she has (sleepy, playing…) still work. Their folder wins,
+  // then the pack that ships in assets/capri/faces, then the eight faces she came with.
+  const { mine = [], shipped = [] } = await host.listFaces().catch(() => ({}));
+  const art = mine.length ? mine : shipped;
+  if (art.length) {
+    const names = Object.keys(FACES);
+    names.forEach((name, i) => { FACES[name] = art[i % art.length]; });
+  }
   // every face decoded now, so a change doesn't blink
   await Promise.all(Object.values(FACES).map((file) => new Promise((done) => {
     const img = new Image();
     img.onload = done;
     img.onerror = done;
-    img.src = DIR + file;
+    img.src = file.includes('://') ? file : DIR + file;
   })));
 
   setMode('idle');
-  for (const src of GLITCH) { const warm = new Image(); warm.src = src; } // no blink on the first burst
-  scheduleGlitch();
+  scheduleJolt();
 
   host.onMusic(paintMusic);
   host.musicNow().then(paintMusic).catch(() => {});

@@ -444,9 +444,18 @@ function siteUrl(address) {
   }
 }
 
-async function site(address) {
+async function site(address, app = '') {
   const url = siteUrl(String(address || '').trim());
   if (!url) return false;
+  // In the app they named (Safari, Chrome…), not just the default browser: `open -a Safari <url>`
+  // starts it too. A name that opens nothing falls back to the browser rather than doing nothing.
+  const name = String(app || '').trim();
+  if (name && MAC) {
+    const opened = await new Promise((resolve) => {
+      execFile('open', ['-a', name, url.toString()], { timeout: 10000 }, (err) => resolve(!err));
+    });
+    if (opened) return true;
+  }
   await shell.openExternal(url.toString());
   return true;
 }

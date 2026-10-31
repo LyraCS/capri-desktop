@@ -3,17 +3,40 @@
 # Capri
 
 Capri, the *Project Capricorn* construct from Cyberpunk: Edgerunners season 2, lives on your desktop
-and tells you what your coding AI is up to: **Claude Code**, **Codex**, **Antigravity** or **OpenCode**. She teleports,
+and tells you what your coding AI is up to: **Claude Code**, **Codex**, **Antigravity**, **OpenCode** or **Hermes Agent**. She teleports,
 glitches, comments on every action, comes to find you when it needs your permission, and loses it when the job is done.
 
 > **On macOS?** This fork runs natively on Apple Silicon (and Intel, built from source). She lives in the menu
 > bar (`⌘⌃C` tucks her away), perches on your windows, rests on the Dock, and watches OpenCode through its
-> plugin API. **[Download the macOS release](https://github.com/LyraCS/capri-desktop/releases/latest)**; see
+> plugin API and Hermes Agent through its webhooks. **[Download the macOS release](https://github.com/LyraCS/capri-desktop/releases/latest)**; see
 > **[MACOS.md](MACOS.md)** for the details, the permissions, and the build.
 
 ![Capri telling you Claude is done](docs/done.png)
 
 ![Teleport, frame by frame](docs/teleport.png)
+
+## What's new in 1.3.0
+
+- **She watches Hermes Agent.** Hermes has no plugin API to sit in, so it reaches her through its own outbound
+  webhooks: `scripts/install-hermes-hooks.js` writes one entry, and `src/main/hermes.js` translates Hermes'
+  events into the same vocabulary Claude Code speaks. Pick her in **Watch › Hermes Agent**; she calls it by
+  name in all five languages, and gets jealous of it like of the others.
+- **She can act, not only talk.** Her chat has tools now — open an app or a site, play music, find a file and
+  open it, look something up on the web, close a window, remember something. The model picks the tool and when;
+  the result goes back to it for another turn, four at most. Text-only models keep the old `[[tag]]` path.
+- **Two things in one message.** "Open Safari and go to YouTube" used to launch Safari and stop. `open_site`
+  takes the app it should land in, `launch.js` runs `open -a Safari <url>`, and when a weak model only opens the
+  app, she opens the site she heard in your message inside it.
+- **A provider that refuses tools is asked again without them**, and on Ollama she only offers tools when
+  `/api/show` says the model has them — so an old local model degrades instead of breaking.
+- **Her file tools hand her real paths**, so "open the note you found" opens the note, and reading the clipboard
+  on macOS returns the text instead of `[object Promise]`.
+- **Her mini-box is a facecam now.** 16:9, the frames you put in `assets/capri/faces/` (packaged, overridable
+  from the user folder), a plate drawn in CSS — violet edge, the green *PROJECT CAPRICORN* strip down the right,
+  chamfered corner, red tab — CRT scanlines, grain and a refresh band inside the picture, and a jolt every
+  12–48 s at 30 fps. It powers on when the app starts, not only when you toggle it.
+- **A new icon**, and the glitch sheet is gone: no generated art ships with her.
+- **`--dev` can look at the mini-box**: `/debug/capture` and `/debug/eval` take `{"box": true}`.
 
 ## What she does
 

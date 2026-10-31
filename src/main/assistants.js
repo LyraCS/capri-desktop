@@ -9,17 +9,20 @@ const claude = require('../../scripts/install-hooks');
 const codex = require('../../scripts/install-codex-hooks');
 const agy = require('../../scripts/install-hooks-agy');
 const opencode = require('../../scripts/install-opencode-plugin');
+const hermes = require('../../scripts/install-hermes-hooks');
 
 const ASSISTANTS = {
   claude: { name: 'Claude Code', hooks: claude, help: 'https://code.claude.com/docs/en/quickstart' },
   codex: { name: 'Codex', hooks: codex, help: 'https://learn.chatgpt.com/docs/hooks' },
   agy: { name: 'Antigravity', hooks: agy, help: 'https://antigravity.google/docs/hooks' },
   opencode: { name: 'OpenCode', hooks: opencode, help: 'https://opencode.ai/v2/docs/build/plugins' },
+  hermes: { name: 'Hermes Agent', hooks: hermes, help: 'https://hermes-agent.nousresearch.com/docs/' },
 };
 
 // Which one she watches: the one picked, else the one her hooks are in, else the one that's installed.
 function resolveAssistant(preference) {
   if (ASSISTANTS[preference]) return preference;
+  if (hermes.status().installed) return 'hermes';
   if (opencode.status().installed) return 'opencode';
   if (codex.status().events.length) return 'codex';
   if (claude.status().installed) return 'claude';

@@ -151,9 +151,10 @@ glitch on every change — the ones that fit idling, working, waiting on you, as
 When a song is playing, that sheet steps aside for the song-vibes one (`assets/capri/song vibes.png`, cut into
 `assets/capri/vibes/`): headphones on, notes over her, horns up, mane thrown back — ten of them, shuffled.
 
-Her tiles tear too: the glitch sheet in `assets/capri/glitch.png` is cut into its pieces (`tools/cut-glitch.swift`)
-and two to four of them flash over her face every second or so — more, and bigger, when she's waiting on you or a
-song is playing. It's all her own art, not a filter.
+Her tile is a tube, not a slideshow: scanlines drifting on 5s, film grain, a refresh band rolling down every
+7s, a tube's flicker, and now and then a real CRT slip — vertical hold losing the picture for a moment, the
+frame squeezing, the brightness dropping out (all in `box.js`, `jolt()` / `scheduleJolt()`). No torn glitch
+pieces: those were cut from a sheet and flashed over her face, and they're gone with it.
 
 It isn't a cage: while it's on, she's in the tile when you're anywhere else, and steps out of it (back onto
 your desktop, where she perches and does her thing) as soon as the app in front is a **terminal** or an

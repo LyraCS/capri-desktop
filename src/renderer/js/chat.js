@@ -149,11 +149,60 @@ const SITES = {
   discord: 'https://discord.com/app', soundcloud: 'https://soundcloud.com', deezer: 'https://www.deezer.com',
 };
 // a browser named with a site ("open youtube on chrome"): the site, in the browser you use
-const BROWSER = /chrome|edge|firefox|opera|brave|vivaldi|duckduckgo|browser/i;
+const BROWSER = /safari|chrome|edge|firefox|opera|brave|vivaldi|duckduckgo|browser|arc|orion|chromium/i;
 // local models this small mostly talk nonsense ("llama3.2:1b", "qwen2.5:0.5b"…)
 const TINY = /[:-](0\.5b|1b|1\.5b|135m|270m|360m)\b/i;
 // her face when she greets you in a mood (bond.js)
 const MOOD_FACE = { angry: 'many', sulk: 'aside', dizzy: 'wide', thrown: 'wide', jealous: 'look', fun: 'laugh', happy: 'laugh', forgiven: 'smug' };
+
+// Her tools (tool calling): what she can do on your PC, written for the model. Each one runs the same
+// action her plain-language guess used to (doNow), so her lines, buttons and animations are the ones
+// you know; the model only decides which one, and when.
+const str = (description) => ({ type: 'string', description });
+const tool = (name, description, properties = {}, required = []) => ({
+  type: 'function',
+  function: { name, description, parameters: { type: 'object', properties, required } },
+});
+const TOOLS = [
+  tool('play_music', 'Play a song, an artist or an album for the user, in the music service they chose (Apple Music, Spotify or YouTube).', { song: str('The song, artist or album, as they named it') }, ['song']),
+  tool('control_music', 'Pause, resume, skip, or change the volume of what is playing.', {
+    action: { type: 'string', enum: ['pause', 'play', 'next', 'previous', 'volup', 'voldown', 'mute'], description: 'What to do with it' },
+  }, ['action']),
+  tool('now_playing', 'What song is playing right now, and in which app.'),
+  tool('play_playlist', "Start one of the user's own playlists, by name.", { name: str("The playlist's name") }, ['name']),
+  tool('open_app', "Open an app or a game installed on the user's PC, by name. A website to go to in it is a second call: open_site with that address and this app.", { name: str('The app or game, as they named it') }, ['name']),
+  tool('open_site', "Open a website, in the user's browser or in an app they named (Safari, Chrome…). A site they named opens right away; one you suggest only gets a button they have to confirm.", {
+    address: str('A full address, like https://www.youtube.com'),
+    app: str('The app to open it in, when the user named one (Safari, Chrome, Firefox…)'),
+  }, ['address']),
+  tool('search_files', "Find a file or a folder on the user's PC, by name or by kind.", {
+    query: str('Words from the file or folder name'),
+    exts: { type: 'array', items: { type: 'string' }, description: 'Extensions to look for, like pdf or png' },
+  }, ['query']),
+  tool('web_search', 'Search the web for the user, in their browser.', { query: str('What to search for') }, ['query']),
+  tool('read_file', "Read a text file she found on the user's PC and answer from what is in it. The path comes from search_files: search first if you have not.", { file: str('The exact path search_files returned') }, ['file']),
+  tool('open_file', 'Open one of the files she found, in the app that opens it, or show it in their Finder / Explorer.', {
+    file: str('The exact path search_files returned'),
+    reveal: { type: 'boolean', description: 'Show it in the file manager instead of opening it' },
+  }, ['file']),
+  tool('read_clipboard', 'The text the user last copied. Only when what they said is about it ("this", "what I copied", "the link I copied").'),
+  tool('close_app', 'Close an app that is open. They get a button to confirm it.', { name: str('The exact app name') }, ['name']),
+  tool('remember', 'Remember something the user asked you to keep in mind.', { text: str('What to remember, in their words') }, ['text']),
+  tool('set_name', 'Learn what the user wants to be called.', { name: str('Their name') }, ['name']),
+];
+
+// What her tools did, gathered into the one shape `after` already reads ({ line, face, art, files,
+// offer, close, site }): lines on top of each other, the last face, and the first button or list.
+function mergeDone(items) {
+  const done = {};
+  for (const item of items.filter(Boolean)) {
+    if (item.line) done.line = [done.line, item.line].filter(Boolean).join('\n');
+    if (item.face) done.face = item.face;
+    if (item.art) done.art = item.art;
+    for (const key of ['files', 'offer', 'reminder', 'close', 'site']) if (item[key] && !done[key]) done[key] = item[key];
+  }
+  return Object.keys(done).length ? done : null;
+}
 
 export class Chat {
   constructor({ capri, panel, voice, host, brain }) {
@@ -176,6 +225,8 @@ export class Chat {
     this.jealousy = null;  // and how she takes your other AIs
     this.onMessage = null; // () => void: you said something to her
     this.waitingWhen = null; // a reminder you asked for without saying when: { text, until }
+    this.useTools = false; // the model takes her tools (tool calling), rather than her guessing your words
+    this.tooled = false;   // a tool ran for the answer in progress (her tags are not read then)
     host.onChatDelta(({ id, text }) => this.onDelta(id, text));
   }
 
@@ -224,6 +275,9 @@ export class Chat {
     this.history = await host.chatMemory().catch(() => this.history); // "forget" in her menu may have emptied it
     this.cold = status.warmup && !this.warm;
     this.agent = Boolean(status.agent); // Claude Code answers, as her, and really works in your project
+    // her tools, when the provider and the model take them: from then on the model picks the action
+    // itself (chat.js' TOOLS) instead of her reading it off your words
+    this.useTools = Boolean(status.tools) && !this.agent;
     this.listApps();
     const shortModel = status.model.replace(/:latest$/, '').replace(/^models\//, ''); // Ollama's tag, Gemini's prefix
     const tiny = status.provider === 'ollama' && TINY.test(status.model) && this.onBetterModel;
@@ -311,18 +365,45 @@ export class Chat {
       const last = messages.at(-1);
       messages[messages.length - 1] = { ...last, content: `${last.content}\n\n(Note for you, never repeat it: ${[mood, this.languageNote()].filter(Boolean).join(' ')})` };
     }
-    // nothing yet after a few seconds: Ollama is still loading the model (the first answer after a start),
-    // or Claude Code is at work
-    const wait = this.agent ? this.t.working : this.cold ? this.t.loading : null;
-    const slow = wait && setTimeout(() => {
-      if (this.turn === id && !this.answer) this.panel.stream(wait);
-    }, LOADING_AFTER_MS);
-    const res = await this.host.chatSend({ id, messages });
-    clearTimeout(slow);
-    if (this.turn !== id) {
-      // closed meanwhile: your message goes too, or the next answer would answer it as well
-      if (this.history.at(-1)?.content === text) this.history.pop();
-      return;
+    // Her tools: the model asks for one, she runs it here (doNow, the same actions as ever), and asks
+    // the model again with what came of it, until it just answers. Four rounds at most.
+    this.tooled = false;
+    const tools = this.useTools && !asked ? TOOLS : null;
+    const ui = [];
+    let openedApp = null; // the app a tool opened for you, if any
+    let siteRan = false;  // and whether a site was opened (or offered) in the same message
+    let res;
+    for (let round = 0; ; round++) {
+      this.answer = '';
+      // nothing yet after a few seconds: Ollama is still loading the model (the first answer after a
+      // start), or Claude Code is at work
+      const wait = this.agent ? this.t.working : this.cold ? this.t.loading : null;
+      const slow = wait && setTimeout(() => {
+        if (this.turn === id && !this.answer) this.panel.stream(wait);
+      }, LOADING_AFTER_MS);
+      res = await this.host.chatSend({ id, messages, tools });
+      clearTimeout(slow);
+      if (this.turn !== id) {
+        // closed meanwhile: your message goes too, or the next answer would answer it as well
+        if (this.history.at(-1)?.content === text) this.history.pop();
+        return;
+      }
+      if (!res.ok || !res.calls?.length || round === 3) break;
+      this.tooled = true;
+      this.capri.pulse();
+      this.voice.play('tick');
+      messages.push({
+        role: 'assistant',
+        content: res.text || '',
+        tool_calls: res.calls.map((call) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments || {}) } })),
+      });
+      for (const call of res.calls) {
+        const out = await this.runTool(call.name, call.arguments || {}, text).catch((err) => ({ result: `it did not work: ${err.message}` }));
+        if (call.name === 'open_app' && out.ui?.app) openedApp = out.ui.app;
+        if (call.name === 'open_site' && out.ui) siteRan = true; // only what really opened (or got its button)
+        messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(out.result ?? null) });
+        if (out.ui) ui.push(out.ui);
+      }
     }
     this.turn = 0;
     if (!res.ok) {
@@ -333,14 +414,121 @@ export class Chat {
       this.panel.setChatBusy(false);
       return;
     }
+    // the provider refused the tools: the model answered without them, so her own reading of your
+    // words does it after all (and stops being offered for the rest of the chat)
+    if (res.noTools) {
+      this.useTools = false;
+      if (!asked) {
+        const late = this.asked(text);
+        if (late && !['close', 'look'].includes(late.kind)) ui.push(await this.doNow(late));
+      }
+    }
+    // The model opened the app and stopped there, though your message named a site too ("open safari
+    // and go to youtube"): it still goes, in the app it just opened. A weaker model never chains the two.
+    const wanted = this.useTools && !asked && openedApp && !siteRan ? namedSite(text) : null;
+    if (wanted) {
+      const out = await this.runTool('open_site', { address: wanted.url, app: openedApp }, text);
+      if (out.ui) ui.push(out.ui);
+    }
     const answer = clean(res.text) || '…';
     this.warm = true;
     this.remember({ role: 'assistant', content: answer });
     this.panel.stream(answer, { done: true });
     this.panel.setFace(mood(answer));
     this.panel.setChatBusy(false);
-    if (!this.agent) this.after(res.text, answer, asked, early, text);
+    if (!this.agent) this.after(res.text, answer, asked, mergeDone([...(early ? [await early] : []), ...ui]), text);
     this.listApps(); // fresh for the next message
+  }
+
+  // One tool the model asked for: run it, tell it what happened, and keep the line (and the button,
+  // or the files) she would have shown for the same thing said plainly. `said`: your message, to tell
+  // a site you named from one the model thought of.
+  async runTool(name, args, said = '') {
+    const { t } = this;
+    const text = (value) => String(value || '').trim();
+    switch (name) {
+      case 'play_music': {
+        const done = await this.song(text(args.song));
+        return done ? { result: `playing: ${text(args.song)}`, ui: done } : { result: 'nothing could be started' };
+      }
+      case 'control_music': {
+        const action = text(args.action).toLowerCase();
+        if (!MEDIA_ACTIONS.has(action)) return { result: `no such action: ${action}` };
+        return (await this.host.media(action))
+          ? { result: `done: ${action}`, ui: { line: t.media[action], face: 'smug' } }
+          : { result: 'the media keys did not answer' };
+      }
+      case 'now_playing': {
+        const done = await this.doNow({ kind: 'now' });
+        return { result: done?.line || 'nothing is playing', ui: done };
+      }
+      case 'play_playlist': {
+        const done = await this.doNow({ kind: 'playlist', name: text(args.name) });
+        return { result: done?.line || 'no playlist by that name', ui: done };
+      }
+      case 'open_app': {
+        const done = await this.doNow({ kind: 'open', text: text(args.name) });
+        if (!done) return { result: 'nothing by that name on this PC' };
+        if (done.offer) return { result: 'a confirmation button is up; it has not opened yet', ui: done };
+        // the rest of what they asked ("…and go to youtube") is another call: say so before it answers
+        return { result: `${done.line} If they also named a website to go to in it, call open_site now with that address and app: "${text(args.name)}".`, ui: done };
+      }
+      case 'open_site': {
+        const address = text(args.address);
+        const site = hostOf(address);
+        if (!site.includes('.')) return { result: `${address || 'that'} is not a web address` };
+        // a site they named opens right away; one only the model thought of gets its button
+        const mine = namedSite(said)?.name === site || said.toLowerCase().includes(site);
+        if (!mine) return { result: 'a confirmation button is up, showing the address; it has not opened yet', ui: { site: address } };
+        const app = text(args.app);
+        return (await this.host.openSite(address, app || undefined))
+          ? { result: `opened ${site}${app ? ` in ${app}` : ''}`, ui: { line: fmt(t.siteOpened, { site }), face: 'laugh' } }
+          : { result: 'the browser did not open' };
+      }
+      case 'search_files': {
+        const done = await this.doNow({ kind: 'files', query: text(args.query), exts: Array.isArray(args.exts) ? args.exts : [], then: null });
+        // the paths themselves, not just her sentence: read_file and open_file take one
+        const list = (done?.files || []).map((f) => f.path).join('\n');
+        return { result: done ? [done.line, list].filter(Boolean).join('\n') : 'nothing found', ui: done };
+      }
+      case 'web_search': {
+        const done = await this.doNow({ kind: 'web', query: text(args.query) });
+        return done ? { result: 'the search is open in their browser', ui: done } : { result: 'the browser did not open' };
+      }
+      case 'read_file': {
+        const done = await this.host.readFile(text(args.file)).catch(() => null);
+        // only a file a search showed her (files.js `found`), and only text: told what to do instead
+        return done?.text
+          ? { result: `"${done.name}":\n${done.text}` }
+          : { result: 'nothing readable at that path: search_files first, then read the exact path it returned' };
+      }
+      case 'open_file': {
+        const file = text(args.file);
+        const ok = await this.host.openFile(file, Boolean(args.reveal)).catch(() => false);
+        return ok
+          ? { result: `opened ${file}`, ui: { line: fmt(t.opened, { app: file.split(/[\\/]/).pop() }), face: 'laugh' } }
+          : { result: `${file} did not open: search_files first, then the exact path it returned` };
+      }
+      case 'read_clipboard': {
+        const copied = await this.host.clipboard().catch(() => '');
+        return copied ? { result: copied } : { result: 'the clipboard is empty' };
+      }
+      case 'close_app': {
+        const app = await this.host.findApp(text(args.name));
+        if (!app) return { result: 'no app by that name is open' };
+        return { result: `a confirmation button is up for ${app.name}; it has not closed yet`, ui: { close: app.name } };
+      }
+      case 'remember': {
+        const done = await this.doNow({ kind: 'memo', text: text(args.text) });
+        return { result: done?.line || 'saved', ui: done };
+      }
+      case 'set_name': {
+        const done = await this.doNow({ kind: 'name', name: text(args.name) });
+        return { result: done?.line || 'saved', ui: done };
+      }
+      default:
+        return { result: `no tool named ${name}` };
+    }
   }
 
   // "Look at my screen" in her chat: she looks (asking you first, the first time) and answers here,
@@ -418,6 +606,8 @@ export class Chat {
     if (memo) return { kind: 'memo', text: memo };
     if (this.look && LOOK_ASK.test(text)) return { kind: 'look' };
     if (SHOT_ASK.test(text)) return { kind: 'shot' };
+    // with tools, the model decides the rest for itself: playing, opening, searching, closing
+    if (this.useTools) return null;
     const roblox = robloxGame(text);
     if (roblox) return { kind: 'roblox', game: roblox };
     if (SEARCH_VERB.test(text) && WEB_WORD.test(text) && searched(text)) return { kind: 'web', query: searched(text) };
@@ -551,7 +741,9 @@ export class Chat {
     const site = namedSite(asked.text);
     if (site && (!item || BROWSER.test(item.name))) {
       this.zap();
-      return (await this.host.openSite(site.url)) ? { line: fmt(t.siteOpened, { site: site.name }), face: 'laugh' } : null;
+      // in the browser they named, not the default one: "open safari and go to youtube" is both
+      const app = item?.kind === 'app' ? this.nameOf(item) : undefined;
+      return (await this.host.openSite(site.url, app)) ? { line: fmt(t.siteOpened, { site: site.name }), face: 'laugh' } : null;
     }
     if (!item) return null; // nothing by that name here: her tag may still say what you meant
     return this.openNow(item);
@@ -563,7 +755,8 @@ export class Chat {
     this.zap();
     const res = await this.host.launch(item);
     const name = this.nameOf(item);
-    return { line: res.ok ? fmt(this.t.opened, { app: name }) : `${this.t.failed} ${res.error}`, face: res.ok ? 'laugh' : 'aside' };
+    // `app`: what she calls it, for opening a site in it right after ("open Safari, then YouTube")
+    return { line: res.ok ? fmt(this.t.opened, { app: name }) : `${this.t.failed} ${res.error}`, face: res.ok ? 'laugh' : 'aside', app: name };
   }
 
   // how she calls it: a folder like Downloads in her words, anything else by its name
@@ -637,10 +830,14 @@ export class Chat {
       });
       return undefined;
     }
+    // a tool's button (they never act on their own): the site it would open, or the app it would close
+    if (done?.site) return this.offerSite(done.site, answer);
+    if (done?.close) return this.offerClose(done.close, answer);
     if (done) return this.addLine(answer, done.line, done.face, done.art);
     if (asked?.kind === 'remind') return undefined; // no time said: her answer asks when
     if (asked?.kind === 'close') return this.offerClose(asked.name, answer);
     if (asked && asked.kind !== 'open') return undefined; // music that didn't work out: nothing more to offer
+    if (this.tooled) return undefined; // she acted through a tool: her tags are the other way of doing it
     const closeTag = tagged(raw);
     if (closeTag) return wanted('close', text) ? this.offerClose(closeTag, answer) : undefined;
     const tag = TAG.exec(raw);
@@ -781,22 +978,27 @@ export class Chat {
     this.listApps();
   }
 
-  // What she can do on the PC when you ask (Windows), and nothing else.
+  // What she can do on the PC when you ask (Windows), and nothing else. With tools, the model is told
+  // about them instead of her tags (the tags stay for the providers that can't take tools).
   powers() {
-    const lines = [
-      'Only when the user asks you to open an app, a game, a file or folder on their desktop, or a folder like Downloads, to play music, to control the music playing, or to open a website: say in a few words that you will, and end your answer with one tag: [[open: NAME]], [[music: ARTIST - SONG]] (it plays where their music plays; if they did not say which song, pick one that fits), [[media: ACTION]] (ACTION: pause, play, next, previous, volup, voldown or mute), or [[site: ADDRESS]]. Some of these get a button to confirm, so never say it is already done. Any other time, write no tag at all: there are no other tags. When they ask what song is playing, or to play one of their playlists, their Mac tells you and does it: answer in a few words, in character, and never say you cannot hear it or see it.',
-    ];
-    if (this.apps.length) {
-      const open = this.apps.map(({ name, label }) => (label && label !== name ? `${name} (${label})` : name)).join(', ');
-      lines.push(`You can also close an app that's open, only when they ask you to: end your answer with [[close: NAME]], NAME being the exact name from this list (the part before the parentheses). They get a button to confirm it. Apps open right now: ${open}.`);
+    const lines = [];
+    if (this.useTools) {
+      lines.push('You act on the user\'s computer only through the tools you were given: play music where their music plays (if they did not say which song, pick one that fits), control what is playing, play one of their playlists, open an app or a game, a file or folder, or a website, find a file on their PC, search the web, close an app that is open, remember something, or learn their name. When they ask for one of those, call the tool: never say you did something you did not call a tool for, and call no tool when they did not ask. One message can ask for two things ("open Safari, then go to YouTube"): call a tool for each, in order, before you answer. Some tools only put a button up for them to confirm: say what you are about to do, never that it is done.');
+    } else {
+      lines.push('Only when the user asks you to open an app, a game, a file or folder on their desktop, or a folder like Downloads, to play music, to control the music playing, or to open a website: say in a few words that you will, and end your answer with one tag: [[open: NAME]], [[music: ARTIST - SONG]] (it plays where their music plays; if they did not say which song, pick one that fits), [[media: ACTION]] (ACTION: pause, play, next, previous, volup, voldown or mute), or [[site: ADDRESS]]. Some of these get a button to confirm, so never say it is already done. Any other time, write no tag at all: there are no other tags. When they ask what song is playing, or to play one of their playlists, their Mac tells you and does it: answer in a few words, in character, and never say you cannot hear it or see it.');
+      if (this.apps.length) {
+        const open = this.apps.map(({ name, label }) => (label && label !== name ? `${name} (${label})` : name)).join(', ');
+        lines.push(`You can also close an app that's open, only when they ask you to: end your answer with [[close: NAME]], NAME being the exact name from this list (the part before the parentheses). They get a button to confirm it. Apps open right now: ${open}.`);
+      }
     }
     if (this.reminders) {
       lines.push('You keep reminders for the user: when they ask you to remind them of something at a given time, your system sets it from their message as they send it (a line under your answer shows it). Just confirm it in a few words, in character, and never say you can\'t. If they didn\'t say when, ask them when.');
       const soon = this.reminders.upcoming.slice(0, 6);
       if (soon.length) lines.push(`Reminders you're keeping for them: ${soon.map((r) => `${clock(r.at, this.brain.lang)}${r.text ? ` (${r.text})` : ''}`).join('; ')}.`);
     }
-    lines.push('Your system also searches the user\'s files when they ask you to find one, searches the web when they ask, takes screenshots, and starts Roblox games by name: what it did shows under your answer, so never make up file names or results.');
-    lines.push('Apart from that, you can\'t see the user\'s screen or files, and you can\'t touch anything else on their PC (settings, files): if asked, say plainly that you can\'t, in character, and don\'t pretend to.');
+    lines.push(this.useTools
+      ? 'Your system also takes screenshots, and starts Roblox games by name when they ask: what it did shows under your answer, so never make up file names or results. That is all you can touch (no settings, no other files) and you can\'t see their screen: if asked for anything else, say plainly that you can\'t, in character, and don\'t pretend to.'
+      : 'Your system also searches the user\'s files when they ask you to find one, searches the web when they ask, takes screenshots, and starts Roblox games by name: what it did shows under your answer, so never make up file names or results. Apart from that, you can\'t see the user\'s screen or files, and you can\'t touch anything else on their PC (settings, files): if asked, say plainly that you can\'t, in character, and don\'t pretend to.');
     return lines;
   }
 
@@ -902,6 +1104,15 @@ export function clean(text) {
 function namedSite(text) {
   const name = Object.keys(SITES).find((n) => new RegExp(`\\b${n}\\b`, 'i').test(text));
   return name ? { name: new URL(SITES[name]).hostname.replace(/^www\./, ''), url: SITES[name] } : null;
+}
+
+// The host of an address as she says it: https://www.youtube.com -> youtube.com ('' if it isn't one).
+function hostOf(address) {
+  try {
+    return new URL(/^https?:\/\//i.test(address) ? address : `https://${address}`).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
 }
 
 // Whether your message asks for what her tag (its kind: open, music, media, site, close) would do.

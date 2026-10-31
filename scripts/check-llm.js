@@ -19,14 +19,14 @@ http.createServer((req, res) => {
   const models = await llm.models('pollinations', cfg);
   assert(models.length, 'pollinations models');
   let streamed = '';
-  const text = await llm.chat('pollinations', cfg, { model: models[0], messages: [{ role: 'user', content: 'Say just: hi' }] }, (p) => { streamed += p; }, new AbortController().signal);
+  const { text } = await llm.chat('pollinations', cfg, { model: models[0], messages: [{ role: 'user', content: 'Say just: hi' }] }, (p) => { streamed += p; }, new AbortController().signal);
   assert(text && text === streamed, 'pollinations stream');
   console.log('pollinations:', models[0], '->', text.slice(0, 60));
   await assert.rejects(llm.models('openai', cfg), /no API key/);
   assert.deepStrictEqual(await llm.models('claude', cfg), ['Claude Code']);
   const persona = { role: 'system', content: 'You are Capri, a playful ghost from Project Capricorn. Keep it to one sentence.' };
-  const a = await llm.chat('claude', cfg, { messages: [persona, { role: 'user', content: 'Remember the word "kiwi". Reply only: ok' }] }, () => {}, new AbortController().signal);
-  const b = await llm.chat('claude', cfg, { messages: [persona, { role: 'user', content: 'What word did I ask you to remember, and what is your name?' }] }, () => {}, new AbortController().signal);
+  const a = (await llm.chat('claude', cfg, { messages: [persona, { role: 'user', content: 'Remember the word "kiwi". Reply only: ok' }] }, () => {}, new AbortController().signal)).text;
+  const b = (await llm.chat('claude', cfg, { messages: [persona, { role: 'user', content: 'What word did I ask you to remember, and what is your name?' }] }, () => {}, new AbortController().signal)).text;
   console.log('claude:', a, '|', b);
   // her hooks (if installed) post this chat's events to CAPRI_PORT: all of them must be recognised as hers
   if (seen.size) assert([...seen].every(llm.isChatSession), `chat events recognised: ${[...seen]}`);

@@ -1,0 +1,486 @@
+/* ------------------------------------------------------------------
+   Capri — promo site
+   Same rules as her overlay: flat, hard-edged, no gradients, no soft
+   shadows. Every panel casts a violet misregistered copy, like her
+   outline. Tokens are hers, copied from src/renderer/styles/capri.css.
+------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('./fonts/chakra-petch-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('./fonts/chakra-petch-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/jetbrains-mono-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+
+:root {
+  /* palette sampled from the show, same values as her overlay */
+  --ink: #120c1c;
+  --ink-2: #20182f;
+  --ink-3: #1a1425; /* the screenshots' own background, keeps frames seam-free */
+  --paper: #fcf2f6;
+  --paper-2: #d6c5d0;
+  --paper-3: #9c8ca0;
+  --red: #ff245d;
+  --green: #36ff73;
+  --violet: #7d3af5;
+  --blue: #2e79f5;
+
+  --font-display: 'Chakra Petch', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --cut: 14px;
+  --clip: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  --pad: clamp(20px, 5vw, 48px);
+  --rule: 1px solid var(--ink-2);
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font: 400 16px/1.6 var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+img { display: block; max-width: 100%; height: auto; }
+
+a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--paper); }
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+main,
+.bar,
+.foot { padding-inline: var(--pad); }
+
+main { max-width: 1160px; margin-inline: auto; }
+
+/* ---------- top bar ---------- */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  height: 60px;
+  background: var(--ink);
+  border-bottom: 2px solid var(--violet);
+}
+
+.mark {
+  font: 700 20px/1 var(--font-display);
+  letter-spacing: 0.16em;
+  color: var(--paper);
+  text-decoration: none;
+  text-shadow: -3px 0 var(--violet), 3px 0 rgb(255 36 93 / 0.7);
+}
+.mark:hover { color: var(--paper); }
+
+.bar__nav {
+  display: flex;
+  gap: clamp(14px, 3vw, 30px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.bar__nav a { color: var(--paper-3); text-decoration: none; }
+.bar__nav a:hover { color: var(--green); }
+
+@media (max-width: 560px) {
+  .bar__nav a:not(:last-child) { display: none; }
+}
+
+/* ---------- type ---------- */
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 0.98;
+}
+
+h1 { font-size: clamp(2rem, 5.4vw, 3.9rem); max-width: 19ch; }
+/* balance is progressive: without it the wrap is merely less pretty, never broken */
+h1, h2, h3 { text-wrap: balance; }
+h3 { font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.05; }
+
+.eyebrow,
+.idx,
+.tag,
+.meta,
+.specs span {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  font-size: 11px;
+  color: var(--green);
+}
+
+.lede {
+  max-width: 56ch;
+  margin: 22px 0 0;
+  color: var(--paper-2);
+  font-size: clamp(15px, 1.1vw, 17px);
+}
+.lede--narrow { max-width: 62ch; }
+
+.meta { font-size: 11px; color: var(--paper-3); letter-spacing: 0.1em; }
+
+/* her glitch: hard on, hard off, no easing */
+.glitch { position: relative; display: inline-block; }
+.glitch::before,
+.glitch::after {
+  content: attr(data-t);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.glitch::before { color: var(--red); transform: translate(-3px, -2px); clip-path: inset(0 0 86% 0); }
+.glitch::after { color: var(--green); transform: translate(3px, 2px); clip-path: inset(82% 0 0 0); }
+
+.glitch::before,
+.glitch::after { animation: jolt-a 2.6s steps(1) 2 both; }
+.glitch::after { animation-name: jolt-b; }
+.glitch:hover::before { animation: jolt-a 0.42s steps(1) 0s infinite; }
+.glitch:hover::after { animation: jolt-b 0.42s steps(1) 0s infinite; }
+
+@keyframes jolt-a {
+  0%, 100% { transform: translate(-3px, -2px); }
+  20% { transform: translate(-6px, 0); }
+  45% { transform: translate(-2px, 2px); }
+  70% { transform: translate(-5px, -1px); }
+}
+
+@keyframes jolt-b {
+  0%, 100% { transform: translate(3px, 2px); }
+  20% { transform: translate(6px, -1px); }
+  45% { transform: translate(2px, -2px); }
+  70% { transform: translate(4px, 1px); }
+}
+
+/* ---------- buttons ---------- */
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 26px;
+  border: 0;
+  background: var(--red);
+  color: var(--ink);
+  font: 700 13px/1 var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  clip-path: var(--clip);
+  /* misregistration lives on the wrapper-free form: a hard offset block behind */
+  box-shadow: 0 0 0 0 transparent;
+  position: relative;
+  transition: transform 120ms steps(2), background 120ms steps(2);
+}
+.btn:hover { background: var(--green); color: var(--ink); transform: translate(2px, 2px); }
+
+.btn--ghost {
+  background: transparent;
+  color: var(--paper);
+  box-shadow: inset 0 0 0 2px var(--violet);
+}
+.btn--ghost:hover { background: var(--violet); color: var(--paper); }
+.btn--ghost:hover { transform: translate(2px, 2px); }
+
+/* ---------- hero ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(24px, 5vw, 64px);
+  align-items: center;
+  padding-block: clamp(48px, 8vw, 96px) clamp(40px, 6vw, 80px);
+}
+
+.hero__fig { margin: 0; }
+.hero__fig img {
+  /* One violet copy behind her, offset 3px — the same misregistration her shader draws
+     (sprite.js: `misreg: [-2.6, 2.2]`), not a thicker one, which only turns the mane's
+     thin spikes into a ghost. Never upscaled past the cut-out's own 220px. */
+  width: clamp(160px, 17vw, 220px);
+  filter: drop-shadow(-3px 2px 0 rgb(125 58 245 / 0.95));
+}
+
+@media (max-width: 780px) {
+  .hero { grid-template-columns: 1fr; }
+  /* she keeps the right edge she has on desktop instead of floating in dead space */
+  .hero__fig { order: -1; justify-self: end; }
+  .hero__fig img { width: 148px; }
+}
+
+/* ---------- bands ---------- */
+
+.band {
+  padding-block: clamp(44px, 6vw, 84px);
+  border-top: var(--rule);
+}
+
+.band__title {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  font-size: clamp(1.35rem, 2.6vw, 2rem);
+  margin-bottom: clamp(24px, 3vw, 40px);
+}
+
+.idx {
+  font-size: 11px;
+  color: var(--red);
+  letter-spacing: 0.18em;
+}
+
+/* ---------- cards ---------- */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(18px, 2.6vw, 32px);
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 24px;
+  background: var(--ink-2);
+}
+/* the misregistered copy every panel in her UI casts */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  translate: 9px 9px;
+  background: var(--violet);
+  z-index: -1;
+}
+.card__frame {
+  margin: -16px -18px 4px;
+  background: var(--ink-3);
+  border-bottom: 2px solid var(--violet);
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.card__frame img { width: 100%; height: 100%; object-fit: contain; }
+.card p { margin: 0; color: var(--paper-2); font-size: 14px; }
+
+.tag {
+  align-self: flex-start;
+  padding: 3px 8px;
+  font-size: 10px;
+  background: var(--red);
+  color: var(--ink);
+  clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+}
+.tag--violet { background: var(--violet); color: var(--paper); }
+
+@media (max-width: 900px) {
+  .cards { grid-template-columns: 1fr; }
+  .card__frame { aspect-ratio: 16 / 9; }
+}
+
+/* ---------- chips ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: 7px 14px;
+  font: 700 13px/1 var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper);
+  box-shadow: inset 0 0 0 2px var(--violet);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+/* ---------- hook panel ---------- */
+
+.panel {
+  margin-top: clamp(28px, 4vw, 44px);
+  padding: clamp(18px, 2.4vw, 28px);
+  background: var(--ink-2);
+  border-left: 2px solid var(--green);
+}
+
+.panel__head { margin-bottom: 18px; }
+
+.hooks {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px clamp(16px, 3vw, 40px);
+  margin: 0;
+  font-size: 14px;
+}
+.hooks dt {
+  font-weight: 600;
+  color: var(--green);
+  letter-spacing: 0.04em;
+}
+.hooks dd { margin: 0; color: var(--paper-2); }
+.hooks code {
+  font: 400 13px/1.4 var(--font-mono);
+  color: var(--paper);
+  background: var(--ink);
+  padding: 1px 5px;
+}
+
+@media (max-width: 620px) {
+  .hooks { grid-template-columns: 1fr; gap: 4px 0; }
+  .hooks dd { margin-bottom: 12px; }
+}
+
+/* ---------- credits ---------- */
+
+.credits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(18px, 2.6vw, 32px);
+}
+
+/* same panel as the hook table, but two voices: the original creator, and the AI */
+.panel--credit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 0;
+  border-left-color: var(--green);
+}
+.panel--credit:nth-child(2) { border-left-color: var(--red); }
+.panel--credit h3 { font-size: clamp(1.02rem, 1.5vw, 1.2rem); }
+.panel--credit p { margin: 0; font-size: 14px; color: var(--paper-2); }
+
+@media (max-width: 780px) {
+  .credits { grid-template-columns: 1fr; }
+}
+
+/* ---------- filmstrip ---------- */
+
+.band--strip { padding-block: clamp(32px, 5vw, 60px); }
+.strip { margin: 0; }
+.strip img {
+  width: 100%;
+  border-block: 1px solid var(--ink-2);
+}
+.strip figcaption { margin-top: 12px; }
+
+/* ---------- download ---------- */
+
+.panel--cta {
+  position: relative;
+  padding: clamp(24px, 4vw, 44px);
+  border-left: 0;
+  border-top: 2px solid var(--red);
+}
+.panel--cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  translate: 10px 10px;
+  background: var(--violet);
+  z-index: -1;
+}
+
+.specs {
+  display: grid;
+  gap: 8px;
+  margin: 30px 0 0;
+  padding: 18px 0 0;
+  border-top: var(--rule);
+  list-style: none;
+  font-size: 14px;
+  color: var(--paper-2);
+}
+.specs li { display: flex; flex-wrap: wrap; gap: 10px; }
+.specs span {
+  min-width: 92px;
+  font-size: 10px;
+  color: var(--paper-3);
+  letter-spacing: 0.18em;
+  padding-top: 3px;
+}
+
+/* ---------- footer ---------- */
+
+.foot {
+  max-width: 1160px;
+  margin-inline: auto;
+  padding-block: 40px 64px;
+  border-top: var(--rule);
+  font-size: 12px;
+  color: var(--paper-3);
+}
+.foot p { margin: 0 0 8px; max-width: 70ch; }
+
+/* ---------- motion preference ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  /* keep the static misregistration, drop the jolt */
+  .glitch:hover::before,
+  .glitch:hover::after,
+  .glitch::before,
+  .glitch::after { animation: none; }
+  .btn { transition: none; }
+}

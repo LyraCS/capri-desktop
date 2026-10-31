@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------------
-   Her facecam: a square, always-on-top window with her face in it,
-   cut like the rest of her interface. A streamer's webcam, not a cage:
+   Her facecam: a 16:9, always-on-top window with her face in it, cut
+   like the rest of her interface. A streamer's webcam, not a cage:
    it shows up when you're not in a terminal or an editor.
 ------------------------------------------------------------------- */
 
@@ -47,6 +47,8 @@
   --paper: oklch(0.97 0.012 350);
   --paper-3: oklch(0.66 0.035 320);
   --violet: oklch(0.55 0.255 292);
+  --edge: oklch(0.62 0.26 294); /* the frame's accent: her violet, lifted enough to read on black */
+  --band: 11px; /* the serial strip down the right edge */
   --red: oklch(0.65 0.245 15);
   --green: oklch(0.88 0.24 148);
   --font-display: 'Chakra Petch', 'Segoe UI', sans-serif;
@@ -80,29 +82,128 @@ body {
   cursor: default;
 }
 
-/* ---------- the tile ---------- */
+/* ---------- the tube ---------- */
+/* A CRT: glass edge and phosphor bloom inside the frame, the corner cut the rest of her interface
+   has. Everything here is CSS, so it costs the tile nothing while it sits there. */
 .facecam {
   position: absolute;
-  inset: 7px;
+  inset: 0;
   overflow: hidden;
-  border: 1px solid oklch(0.55 0.255 292 / 0.65);
-  background: oklch(0.14 0.03 300);
+  /* the plate: near-black, with a bright edge and a hairline inside it, the way the card art is cut */
+  background: oklch(0.09 0.02 300);
+  border: 2px solid var(--edge);
   box-shadow:
-    6px 6px 0 oklch(0.55 0.255 292 / 0.28),
-    0 0 28px oklch(0.55 0.255 292 / 0.22);
+    inset 0 0 0 1px color-mix(in oklch, var(--edge) 30%, transparent),
+    inset 0 0 18px oklch(0 0 0 / 0.55);
+  animation: none;
+  /* the cut corners of the reference card */
   clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
   -webkit-app-region: drag;
 }
 
+/* the set switching on, once the window is actually up (box.js listens for box:show) */
+.facecam.is-on {
+  animation: poweron 420ms ease-out 1;
+}
+
+/* a red tab cut into the bottom left, the one warm mark on the plate */
+.facecam::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 22px;
+  height: 7px;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--red);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 40%);
+}
+
 .facecam__stage {
   position: absolute;
+  /* the picture is the card: 2px of edge plus a 3px gutter, and 12px for the serial strip —
+     that leaves 378×215, 16:9 to within 1%, so nothing is framed by a black band */
+  inset: 3px var(--band) 3px 3px;
+  overflow: hidden; /* a jolt or a zoom never paints outside the picture */
+  animation: flicker 6s steps(1, end) infinite;
+}
+
+/* film grain: her picture never sits perfectly still, the way a tube's doesn't */
+.facecam__stage::before {
+  content: '';
+  position: absolute;
   inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.14;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.65'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
+  animation: fizz 1.2s steps(3, end) infinite;
+}
+
+/* the refresh band, rolling down the picture */
+.facecam__stage::after {
+  content: '';
+  position: absolute;
+  inset: -40% 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    transparent 0 44%,
+    oklch(0.97 0.012 350 / 0.1) 47%,
+    oklch(0.97 0.012 350 / 0.19) 50%,
+    oklch(0.97 0.012 350 / 0.1) 53%,
+    transparent 56%
+  );
+  mix-blend-mode: screen;
+  animation: roll 7s linear infinite;
+}
+
+/* the serial strip: a black plate down the right edge with her green readout on it */
+.facecam__serial {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--band);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font: 600 9px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--green);
+  background: oklch(0.06 0.02 300);
+  border-left: 1px solid color-mix(in oklch, var(--edge) 40%, transparent);
+  text-shadow: 0 0 7px color-mix(in oklch, var(--edge) 45%, transparent);
+  pointer-events: none;
+  z-index: 1; /* under the scanlines and the band: it's part of the screen */
+}
+
+/* and the little marks a real label carries: a block, a bar */
+.facecam__serial::after {
+  content: '';
+  position: absolute;
+  bottom: 7px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  background: var(--green);
+  box-shadow: 0 9px 0 -1px color-mix(in oklch, var(--edge) 55%, transparent);
 }
 
 /* the beat: she moves to the song, and stands still when it stops */
 .facecam__beat {
   position: absolute;
   inset: 0;
+  overflow: hidden; /* the picture's own box: the jolts' scale stays inside it */
   animation: breathe 7s ease-in-out infinite;
   transform-origin: 50% 42%;
 }
@@ -118,20 +219,19 @@ body {
   height: 100%;
   object-fit: cover;
   object-position: 50% 40%;
-  filter: saturate(1.06) contrast(1.04);
+  filter: saturate(1.16) contrast(1.1) brightness(1.03);
 }
 
-/* an expression change, the way her art cuts: a hard glitch, then the new face */
-.facecam__img.is-glitch {
-  animation: glitch 240ms steps(2, end) 1;
-}
+/* an expression change is rolled in box.js (a 30fps burst of its own), not here */
 
 .facecam__vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(75% 70% at 50% 42%, transparent 45%, oklch(0.1 0.03 300 / 0.72) 100%),
+    /* the sheen of glass, top left */
+    radial-gradient(90% 70% at 22% 0%, oklch(0.97 0.012 350 / 0.07), transparent 55%),
+    radial-gradient(92% 92% at 50% 50%, transparent 70%, oklch(0.1 0.03 300 / 0.3) 100%),
     linear-gradient(oklch(0.1 0.03 300 / 0.55), transparent 28%, transparent 70%, oklch(0.1 0.03 300 / 0.65));
 }
 
@@ -139,8 +239,11 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(transparent 0 2px, oklch(0 0 0 / 0.14) 2px 3px);
-  opacity: 0.6;
+  /* one dark line every three pixels, drifting down: the raster is never quite still */
+  background: repeating-linear-gradient(transparent 0 1px, oklch(0 0 0 / 0.26) 1px 2px);
+  background-size: 100% 2px;
+  opacity: 0.85;
+  animation: raster 5s linear infinite;
 }
 
 /* ---------- hud ---------- */
@@ -148,11 +251,13 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  right: var(--band);
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 8px 0 10px;
+  padding: 6px 8px 6px 10px;
+  /* the frame is only a few pixels thick now, so the header carries its own backing */
+  background: linear-gradient(oklch(0.08 0.02 300 / 0.55), transparent);
 }
 
 .facecam__dot {
@@ -166,7 +271,11 @@ body {
 .facecam__name {
   font: 700 13px/1 var(--font-display);
   letter-spacing: 0.16em;
-  text-shadow: 0 1px 6px oklch(0 0 0 / 0.8);
+  /* a touch of misregistration: the red and green of a tube that never lines up */
+  text-shadow:
+    1px 0 0 oklch(0.65 0.245 15 / 0.5),
+    -1px 0 0 color-mix(in oklch, var(--edge) 42%, transparent),
+    0 1px 6px oklch(0 0 0 / 0.8);
 }
 
 .facecam__live {
@@ -209,7 +318,7 @@ body {
 .facecam__foot {
   position: absolute;
   left: 0;
-  right: 0;
+  right: var(--band);
   bottom: 0;
   display: flex;
   align-items: center;
@@ -267,21 +376,7 @@ body {
 .facecam__bars i:nth-child(3) { height: 55%; animation-delay: 260ms; }
 .facecam__bars i:nth-child(4) { height: 75%; animation-delay: 390ms; }
 
-/* the glitch pieces, flashed over her face now and then */
-.facecam__glitch {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.facecam__glitch img {
-  position: absolute;
-  opacity: 0;
-  filter: saturate(1.7) contrast(1.15) brightness(1.1);
-  will-change: opacity;
-}
+/* the glitch pieces are gone: what interference is left is the tube's own (box.js › jolt) */
 
 @keyframes breathe {
   0%, 100% { transform: scale(1.01); }
@@ -294,12 +389,34 @@ body {
   70% { transform: scale(1.02) translateY(1px); }
 }
 
-@keyframes glitch {
-  0% { transform: translate(0); filter: saturate(1.06) contrast(1.04); }
-  25% { transform: translate(-5px, 1px) scale(1.015); filter: hue-rotate(24deg) saturate(1.5) contrast(1.1); }
-  50% { transform: translate(4px, -2px) scale(1.01); filter: saturate(1.1) contrast(1.06); }
-  75% { transform: translate(-2px, 0); filter: none; }
-  100% { transform: translate(0); filter: saturate(1.06) contrast(1.04); }
+/* the tube warming up: a line that opens into her */
+@keyframes poweron {
+  0% { opacity: 0; transform: scaleY(0.02); filter: brightness(2.6); }
+  45% { opacity: 1; transform: scaleY(0.05); filter: brightness(2); }
+  100% { opacity: 1; transform: scaleY(1); filter: none; }
+}
+
+/* a tube doesn't hold its brightness perfectly */
+@keyframes flicker {
+  0%, 91%, 100% { opacity: 1; }
+  92% { opacity: 0.9; }
+  93% { opacity: 1; }
+  96% { opacity: 0.94; }
+}
+
+/* the refresh band, top to bottom */
+@keyframes roll {
+  from { transform: translateY(-34%); }
+  to { transform: translateY(34%); }
+}
+
+/* grain that never lands on the same pixel twice */
+@keyframes fizz {
+  to { background-position: 43px 27px; }
+}
+
+@keyframes raster {
+  to { background-position: 0 3px; }
 }
 
 @keyframes bar {
@@ -313,10 +430,14 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .facecam,
+  .facecam__stage,
+  .facecam__stage::before,
+  .facecam__stage::after,
+  .facecam__scan,
   .facecam__beat,
   .facecam__bars i,
-  .facecam__dot,
-  .facecam__img.is-glitch {
+  .facecam__dot {
     animation: none !important;
   }
 }

@@ -181,7 +181,8 @@ test('installer: one file under ~/.config/opencode/plugins, idempotent, removabl
     assert.equal(installer.status().stale, false);
 
     const { assistant, resolveAssistant } = require('../src/main/assistants');
-    assert.equal(resolveAssistant('auto'), 'opencode');
+    // picked explicitly: 'auto' depends on what else is installed on the machine (hermes, codex…)
+    assert.equal(resolveAssistant('opencode'), 'opencode');
     assert.equal(assistant('opencode').hooks, installer);
     assert.match(assistant('opencode').help, /opencode\.ai/);
 

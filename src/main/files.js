@@ -136,6 +136,22 @@ async function open(file, { reveal = false } = {}) {
   if (err) throw new Error(err);
 }
 
+// What's in one of the files she found, as text: her answer comes from it. Only a file a search
+// showed her, like `open`; null when it's gone, or isn't text.
+// shortcut: text files only (a PDF or a picture is not read), add an extractor the day someone asks
+const READ_MAX = 6000; // characters of it a model can be handed: a page, not a library
+function read(file) {
+  if (!found.has(file)) return null;
+  let buf;
+  try {
+    buf = fs.readFileSync(file).subarray(0, 256 * 1024);
+  } catch {
+    return null;
+  }
+  if (buf.includes(0)) return null; // binary
+  return { name: path.basename(file), text: buf.toString('utf8').slice(0, READ_MAX) };
+}
+
 // A screenshot of the screen she's on, full size, saved in Pictures › Screenshots (made if needed).
 async function screenshot(display) {
   const d = display || screen.getPrimaryDisplay();
@@ -153,4 +169,4 @@ async function screenshot(display) {
   return { path: file, name: path.basename(file) };
 }
 
-module.exports = { search, open, screenshot };
+module.exports = { search, open, read, screenshot };

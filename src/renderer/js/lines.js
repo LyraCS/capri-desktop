@@ -1801,8 +1801,26 @@ export const LINES = {
 
 // The coding assistants she can watch besides Claude Code: the same lines with their name, their
 // hooks file, and what to do once her hooks are in.
-export const ASSISTANT_NAMES = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity', opencode: 'OpenCode' };
+export const ASSISTANT_NAMES = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity', opencode: 'OpenCode', hermes: 'Hermes Agent' };
 const OTHERS = {
+  hermes: {
+    name: 'Hermes Agent', file: 'config.yaml', dir: '.hermes',
+    // before the click, and after it
+    ask: {
+      en: 'Want me to plug into Hermes? One click writes one line in its config, then start a new Hermes session.',
+      fr: 'Tu veux que je me branche sur Hermes ? Un clic écrit une ligne dans sa config, puis lance une nouvelle session Hermes.',
+      es: '¿Quieres que me conecte a Hermes? Un clic escribe una línea en su config, y luego empieza una sesión nueva de Hermes.',
+      pt: 'Quer que eu me conecte ao Hermes? Um clique escreve uma linha na config dele, depois comece uma sessão nova do Hermes.',
+      ru: 'Подключиться к Hermes? Один клик добавит строку в его конфиг, потом запусти новую сессию Hermes.',
+    },
+    after: {
+      en: 'Start a new Hermes session and ask it anything. The moment it runs a tool, I’ll tell you.',
+      fr: 'Lance une nouvelle session Hermes et demande-lui quelque chose. Dès qu’il lance un outil, je te le dis.',
+      es: 'Empieza una sesión nueva de Hermes y pídele algo. En cuanto use una herramienta, te aviso.',
+      pt: 'Comece uma sessão nova do Hermes e peça algo a ele. Assim que ele usar uma ferramenta, eu te aviso.',
+      ru: 'Запусти новую сессию Hermes и попроси что-нибудь. Как только он вызовет инструмент, я скажу.',
+    },
+  },
   codex: {
     name: 'Codex', file: 'hooks.json', dir: '.codex',
     // before the click, and after it

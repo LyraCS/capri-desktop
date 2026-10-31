@@ -13,6 +13,11 @@ const LONG_JOB_ACTIONS = 50;
 const THINK_AFTER = 15000;
 const THINK_SAY = 40000;
 const THINK_LONG = 120000;
+// a session that only ever got a prompt and then went quiet is over (its agent answered in one turn,
+// or died): past this, it stops pinning her in work mode with that prompt's action still up
+const PROMPT_QUIET = 60000;
+// one that did run tools may be a long job, so it gets ten minutes of silence before she gives up on it
+const JOB_QUIET = 10 * 60 * 1000;
 
 export class Brain {
   constructor({ capri, panel, voice, host, mission, lang = 'fr', assistant = 'claude' }) {
@@ -76,10 +81,10 @@ export class Brain {
     }
     // the demo's second half (scripts/demo-sequence.js), not a Claude event
     if (evt.hook_event_name === 'CapriShowcase') return this.onShowcase?.();
-    // Codex's, Antigravity's and OpenCode's hooks mark their sessions (codex:..., agy:...,
-    // opencode:...): only the one she watches counts. Another one at work is another AI in your
-    // life: she notices (bond.js).
-    const source = /^(codex|agy|opencode):/.exec(String(evt.session_id || ''))?.[1] || 'claude';
+    // Codex's, Antigravity's, OpenCode's and Hermes Agent's hooks mark their sessions (codex:...,
+    // agy:..., opencode:..., hermes:...): only the one she watches counts. Another one at work is
+    // another AI in your life: she notices (bond.js).
+    const source = /^(codex|agy|opencode|hermes):/.exec(String(evt.session_id || ''))?.[1] || 'claude';
     if (!evt.demo && source !== this.assistant) {
       this.onRival?.(source === 'agy' ? 'gemini' : source);
       return undefined;
@@ -154,11 +159,19 @@ export class Brain {
   }
 
   thinkTick() {
+    // not every agent says when a turn is over: one that only got a prompt and never ran a tool is
+    // done talking, and left working she keeps its action on the ticker for ever (Hermes' one-shot
+    // turns did exactly that, and three of them parked her in work mode with "Loads" over her head)
+    for (const s of this.sessions.values()) {
+      if (s.working && Date.now() - s.seen > (s.count ? JOB_QUIET : PROMPT_QUIET)) s.working = false;
+    }
     const busy = this.busySessions;
     if (!busy.length) {
       clearInterval(this.thinkTimer);
       this.thinkTimer = 0;
       this.thinking = null;
+      this.panel.setTicker(null); // nothing is running, so nothing is up there
+      if (this.capri.mode === 'work') this.capri.setMode('idle');
       return;
     }
     const s = busy.sort((a, b) => b.seen - a.seen)[0];
