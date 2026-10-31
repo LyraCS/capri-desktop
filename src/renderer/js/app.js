@@ -207,6 +207,9 @@ async function boot() {
       mask.hide();
     }
   };
+  // Whether anything is actually running: her mode can still read work after a turn that never said
+  // it was done, and that alone used to keep her from ever sleeping (see capri.behave)
+  capri.onWorking = () => brain.busySessions.length > 0;
   capri.onMode = (mode, prev) => {
     chip.setMode(mode, prev);
     host.reportMode(mode); // her facecam wears the face that goes with it

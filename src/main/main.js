@@ -281,6 +281,13 @@ function boxAnchor() {
 
 function sendBoxAnchor() {
   if (!box || box.isDestroyed() || !overlay) return;
+  // A hidden tile still has bounds, and its anchor alone tells the overlay to hide her sprite and hang
+  // her panel off the tile: fitting the hidden box after sleep did that, and she was gone from the
+  // screen with the bubble at its edge. The facecam being down is the whole state; say so instead.
+  if (!facecamUp) {
+    sendCommand('box', { on: false });
+    return;
+  }
   const b = box.getBounds();
   const o = overlay.getBounds();
   const rect = { x: b.x - o.x, y: b.y - o.y, w: b.width, h: b.height };
@@ -1013,7 +1020,12 @@ function registerIpc() {
   ipcMain.handle('config:set', (_e, patch) => updateConfig(patch));
   ipcMain.handle('demo:window', (_e, open) => demoWindow(open));
   // right-clicking her: the same menu as the tray icon (which Windows often hides behind the ^ by the clock)
-  ipcMain.on('menu:open', () => trayMenu?.popup({ window: overlay }));
+  // over the window that asked: from her tile, a menu popped over the overlay's full screen hangs far
+  // from where the pointer is
+  ipcMain.on('menu:open', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    trayMenu?.popup({ window: win && !win.isDestroyed() ? win : overlay });
+  });
   // her welcome panel's buttons
   ipcMain.handle('hooks:install', () => runHooks('install', { quiet: true }));
   ipcMain.handle('claude:found', () => fs.existsSync(path.dirname(activeHooks().status().file))); // Claude Code keeps its settings there
@@ -1483,12 +1495,15 @@ function main() {
       sendToBox('box:wake');
       // the screen has been through a lot: put her tile back up, at its level, where it was
       setTimeout(() => {
+        // the tile and the overlay's idea of it drift while the screen is away: say which one it is
+        if (!facecamUp) {
+          sendCommand('box', { on: false });
+          return;
+        }
         if (!box || box.isDestroyed()) return;
         box.setAlwaysOnTop(true, 'floating');
-        if (facecamUp) {
-          box.showInactive();
-          sendBoxAnchor();
-        }
+        box.showInactive();
+        sendBoxAnchor();
       }, 1200);
     };
     powerMonitor.on('lock-screen', () => { sendCommand('sleep'); sendToBox('box:sleep'); });

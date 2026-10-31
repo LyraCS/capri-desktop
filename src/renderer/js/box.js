@@ -220,6 +220,11 @@ async function boot() {
   host.onBoxSleep(() => setMode('sleep'));
   host.onBoxWake(() => setMode('idle'));
 
+  // the same menu right-clicking her in the overlay opens, from her tile
+  window.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    host.openMenu();
+  });
   document.getElementById('talk').addEventListener('click', () => host.boxChat());
   document.getElementById('close').addEventListener('click', () => host.boxClose());
 }

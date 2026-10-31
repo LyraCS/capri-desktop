@@ -98,7 +98,8 @@ body {
   animation: none;
   /* the cut corners of the reference card */
   clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
-  -webkit-app-region: drag;
+  /* the picture answers clicks (her menu on a right-click); the header is the handle, like a title bar */
+  -webkit-app-region: no-drag;
 }
 
 /* the set switching on, once the window is actually up (box.js listens for box:show) */
@@ -258,6 +259,7 @@ body {
   padding: 6px 8px 6px 10px;
   /* the frame is only a few pixels thick now, so the header carries its own backing */
   background: linear-gradient(oklch(0.08 0.02 300 / 0.55), transparent);
+  -webkit-app-region: drag;
 }
 
 .facecam__dot {

@@ -563,7 +563,9 @@ export class Capri {
       this.gaze();
     }
 
-    if (this.mode === 'idle' && now - this.lastActivity > SLEEP_AFTER) this.setMode('sleep');
+    // Ten minutes without a thing from anyone and she sleeps — and not only from idle: an agent that
+    // never says its turn is over leaves her in work mode, and work mode alone kept her awake for days.
+    if (this.mode !== 'sleep' && now - this.lastActivity > SLEEP_AFTER && !this.onWorking?.()) this.setMode('sleep');
     if (this.mode === 'sleep' && now - this.sleptAt > DOZE_AFTER) {
       this.doze();
       return;
