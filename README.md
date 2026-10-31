@@ -31,7 +31,7 @@ glitches, comments on every action, comes to find you when it needs your permiss
   `/api/show` says the model has them — so an old local model degrades instead of breaking.
 - **Her file tools hand her real paths**, so "open the note you found" opens the note, and reading the clipboard
   on macOS returns the text instead of `[object Promise]`.
-- **Her mini-box is a facecam now.** 16:9, the frames you put in `assets/capri/faces/` (packaged, overridable
+- **Her mini-box is a facecam now.** 16:9, the frames in `assets/capri/faces/` (packaged, overridable
   from the user folder), a plate drawn in CSS — violet edge, the green *PROJECT CAPRICORN* strip down the right,
   chamfered corner, red tab — CRT scanlines, grain and a refresh band inside the picture, and a jolt every
   12–48 s at 30 fps. It powers on when the app starts, not only when you toggle it.
